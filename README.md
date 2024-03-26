@@ -201,4 +201,6 @@ CREATE TABLE arxiv_cs_lg (
 
 ## TODO: fix
 1. 由于数据库架构问题，重复收录paper于不同的数据库中，比如一个文章同时属于cs.AI和cs.CR，则会同时收录在两个数据库中
+2. 从单一的syn server.py架构，可能会考虑NodeJS，更加合理的asyn架构
+3. 更改数据库架构问题，提高扩展性
 
