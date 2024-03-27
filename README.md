@@ -13,14 +13,14 @@ cd ArxivDay
 ### 2. 配置Python虚拟环境
 对于Windows：
 ```
-python -m venv venv
-.\venv\Scripts\activate
+python -m venv arxiv
+.\arxiv\Scripts\activate
 ```
 
 对于Linux：
 ```
-python3 -m venv venv
-source venv/bin/activate
+python3 -m venv arxiv
+source arxiv/bin/activate
 ```
 
 安装依赖：
@@ -74,6 +74,13 @@ cs.LG=arxiv_cs_lg           # 如上
 
 ### 5. 登录Mysql添加数据库
 我们需要为我们的python添加一些数据库环境。
+
+创建一个用户（最好不要用root用户）
+```
+CREATE USER 'seanzou'@'localhost' IDENTIFIED BY '你的密码';
+GRANT ALL PRIVILEGES ON mydatabase.* TO 'seanzou'@'localhost';
+FLUSH PRIVILEGES;
+```
 
 登录MySQL
 ```
@@ -171,28 +178,28 @@ CREATE TABLE arxiv_cs_lg (
 
     对于Windows：
     ```
-    .\venv\Scripts\activate
-    python arxiv_auto.py
+    .\arxiv\Scripts\activate
+    .\arxiv\Scripts\python3 arxiv_auto.py
     ```
 
     对于Linux：
     ```
-    source venv/bin/activate
-    python arxiv_auto.py
+    source arxiv/bin/activate
+    arxiv/bin/python3 arxiv_auto.py
     ```
 
 - 第二个窗口运行server.py，提供web UI，打开"localhost:80"：
 
     对于Windows：
     ```
-    .\venv\Scripts\activate
-    python server.py
+    .\arxiv\Scripts\activate
+    .\arxiv\Scripts\python3 server.py
     ```
 
     对于Linux：
     ```
-    source venv/bin/activate
-    python server.py
+    source arxiv/bin/activate
+    arxiv/bin/python3 server.py
     ```
 
 ## 注意事项
