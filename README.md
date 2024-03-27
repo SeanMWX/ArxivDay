@@ -78,7 +78,7 @@ cs.LG=arxiv_cs_lg           # 如上
 创建一个用户（最好不要用root用户）
 ```
 CREATE USER 'seanzou'@'localhost' IDENTIFIED BY '你的密码';
-GRANT ALL PRIVILEGES ON mydatabase.* TO 'seanzou'@'localhost';
+GRANT ALL PRIVILEGES ON arxiv.* TO 'seanzou'@'localhost';
 FLUSH PRIVILEGES;
 ```
 
