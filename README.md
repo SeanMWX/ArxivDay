@@ -1,7 +1,8 @@
 # Arxiv Day
 Arxiv Day 是一个自动化工具，用于从arXiv网站抓取最新的学术论文，并使用ChatGPT将论文的标题和摘要翻译成中文。此工具旨在为研究人员、学生和任何对最新科学研究感兴趣的人提供便捷的方式，以获取并阅读最新的研究成果的中文摘要。它还包含一个简单的Web服务器，用于展示最新收录的论文摘要。
 
-[点击进入 Arxiv Day](http://arxivday.com)
+[点击进入 Arxiv Day](http://arxivday.com)  
+[【ArxivDay】如何优雅地每日查看Arxiv的文章？](https://www.bilibili.com/video/BV1zm41167We)
 
 ## 如何使用？
 ### 1. 克隆仓库
