@@ -2,3 +2,8 @@ mysql-connector-python==8.3.0
 schedule==1.2.1
 openai==1.14.2
 arxiv==2.1.0
+aiohttp==
+aiomysql==
+aiohttp-jinja2==
+jinja2==
+asyncio==

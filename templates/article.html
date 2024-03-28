@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>{{title}}</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        /* 基础重置 */
+        body, html {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            background-color: #f0f0f2; /* 微妙的灰色背景 */
+            color: #333; /* 深灰色文字，增加对比度但不过分强烈 */
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; /* 更现代的字体 */
+        }
+
+        /* 主内容区 */
+        .content {
+            display: flex;
+            justify-content: center;
+            text-align: left;
+            padding: 20px;
+            min-height: calc(100vh - 60px);
+            line-height: 1.5;
+        }
+
+        /* 内部容器 */
+        .inner-content {
+            max-width: 1200px;
+            width: 100%;
+            background: #fff; /* 白色背景提升内容可读性 */
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1); /* 微妙的阴影增加立体感 */
+            padding: 20px; /* 内容与边缘的距离 */
+            border-radius: 5px; /* 轻微的圆角 */
+        }
+
+        /* 页脚样式 */
+        .site-info {
+            background-color: #f1f1f1; /* 页脚背景色 */
+            color: #333; /* 页脚文字色 */
+            text-align: center;
+            padding: 10px 0;
+            font-size: 14px;
+        }
+
+        /* 链接样式 */
+        a {
+            color: #007bff;
+            text-decoration: none;
+            transition: color 0.3s ease-in-out;
+        }
+
+        a:hover, a:focus {
+            color: #0056b3;
+            text-decoration: underline;
+        }
+
+        /* 文章容器样式 */
+        .article-container {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 20px;
+            border-bottom: 1px solid #e0e0e0;
+            padding-bottom: 15px;
+        }
+
+        /* 文章左侧和右侧样式 */
+        .article-left, .article-right {
+            width: 48%;
+        }
+
+        /* 文章标题和摘要样式 */
+        .article-title, .article-summary {
+            margin: 5px 0;
+        }
+
+        /* 增加科技感的标题样式 */
+        h1 {
+            color: #333;
+            text-align: center;
+            font-weight: 300;
+            letter-spacing: -1px; /* 字母间距调整 */
+        }
+
+        /* 微调滚动条样式 */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #888;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+
+        .header-info {
+            text-align: center;
+            padding: 20px;
+            background-color: #eef;
+            border-bottom: 1px solid #ddd;
+        }
+
+        .header-info h1 {
+            margin: 0 0 10px 0;
+        }
+
+        .header-info p {
+            margin: 5px 0;
+            color: #666;
+            font-size: 16px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header-info">
+        <h1>{{title}}</h1>
+        <p>Articles: {{articles_count}}</p>
+        <p>Last Updated: {{last_updated}} (+00:00)</p>
+    </div>
+        <div class="content">
+            <div class="inner-content">
+                {% for article in articles %}
+                    <div class="article-container">
+                        <div class="article-left">
+                            <h3 class="article-title">{{ article.title }}</h3>
+                            <p class="article-summary">{{ article.summary }}</p>
+                            <p><i>Updated: {{ article.updated.strftime('%Y-%m-%d %H:%M:%S') }}</i></p>
+                        </div>
+                        <div class="article-right">
+                            <h3 class="article-title">标题: {{ article.CN_title }}</h3>
+                            <p class="article-summary">摘要: {{ article.CN_summary }}</p>
+                            <p><i>更新时间: {{ article.updated.strftime('%Y-%m-%d %H:%M:%S') }}</i></p>
+                            <p><i>领域: {{ article.categories }}</i></p>
+                            <p><i>下载: <a href="{{ article.entry_id }}" target="_blank">{{ article.entry_id }}</a></i></p>
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+        </div>        
+    <div class="site-info">
+        Xinhai (Sean) Zou. <br/>
+        This website does not contain any JavaScript code. <br/>
+    </div>
+</body>
+</html>
