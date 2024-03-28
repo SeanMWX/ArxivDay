@@ -222,7 +222,7 @@ CREATE TABLE arxiv_cs_lg (
 
 - 2024年3月24日，[ArxivDay](http://arxivday.com)上线
 - 2024年3月26日，[Github-ArxivDay](https://github.com/SeanMWX/ArxivDay)上线
-- 2024年3月27日，增加asyn服务器
+- 2024年3月27日，增加asyn服务器[asyn_server.py](https://github.com/SeanMWX/ArxivDay/blob/main/asyn_server.py)
 
 ## TODO: fix
 1. <del>（已完成）从单一的syn server.py架构，可能会考虑NodeJS，更加合理的asyn架构</del>
