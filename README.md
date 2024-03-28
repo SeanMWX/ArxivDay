@@ -209,8 +209,15 @@ CREATE TABLE arxiv_cs_lg (
 2. 确保安装了所有依赖项，使用pip install -r requirements.txt命令。
 3. 根据配置文件config.ini调整MySQL用户名、密码、服务器端口等信息。
 
-## TODO: fix
-1. 由于数据库架构问题，重复收录paper于不同的数据库中，比如一个文章同时属于cs.AI和cs.CR，则会同时收录在两个数据库中
-2. 从单一的syn server.py架构，可能会考虑NodeJS，更加合理的asyn架构
-3. 更改数据库架构问题，提高扩展性
+## History:
 
+- 2024年3月24日，[ArxivDay](http://arxivday.com)上线
+- 2024年3月26日，[Github-ArxivDay](https://github.com/SeanMWX/ArxivDay)上线
+- 2024年3月27日，增加asyn服务器
+
+## 未来功能
+1. 挑选文章 -> 全文解读 （ChatGPT接口，或者月之暗面，2M上下文）
+2. 选取日期，当前不能选取日期很奇怪
+3. 导出文章引用（文献？）
+4. arxiv-sanity未来参考，文章推荐
+5. 知识蒸馏，知识图谱，日、月、年趋势

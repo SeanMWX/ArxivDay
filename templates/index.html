@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>{{title}}</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            background-color: #f0f0f2;
+            color: #333;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        .content {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+            padding: 20px;
+            min-height: calc(100vh - 60px);
+            line-height: 1.5;
+        }
+        .inner-content {
+            max-width: 1200px;
+            width: 100%;
+            background: #fff;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            padding: 20px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+        .site-info {
+            background-color: #f1f1f1;
+            color: #333;
+            text-align: center;
+            padding: 10px 0;
+            font-size: 14px;
+        }
+        a {
+            color: #007bff;
+            text-decoration: none;
+            transition: color 0.3s ease-in-out;
+        }
+        a:hover, a:focus {
+            color: #0056b3;
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="content">
+        <h1>Welcome to Arxiv Day</h1>
+        <div class="inner-content">
+            <h2>We collect:</h2>
+            {% for category, info in categories_info.items() %}
+            <p><a href="/{{ category }}">Arxiv: {{ info.name }}</a> - Latest Update: {{ info.latest_update }}, Articles: {{ info.count }}</p>
+            {% endfor %}
+        </div>
+        <div class="inner-content">
+            <h2>What is Arxiv Day?</h2>
+            <p>We are arxiv papers every 2 hours, and translate them to Chinese. Future may have API and more abilities.</p>
+            <p>Source code has been be released in <a href="https://github.com/SeanMWX/ArxivDay">Github</a>.</p>
+        </div>
+        <div class="inner-content">
+            <h2>Contact me.</h2>
+            <p><a href="https://seanzou.com">Sean Zou</a></p>
+        </div>
+    </div>
+    <div class="site-info">
+        Xinhai (Sean) Zou. <br/>
+        This website does not contain any JavaScript code. <br/>
+    </div>
+</body>
+</html>

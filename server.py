@@ -74,6 +74,8 @@ class Database:
                     
         return latest_date, count
 
+
+
 # HTTP请求处理器
 class RequestHandler(BaseHTTPRequestHandler):
     """HTTP请求处理器。
