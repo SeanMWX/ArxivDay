@@ -5,6 +5,15 @@ Arxiv Day 是一个自动化工具，用于从arXiv网站抓取最新的学术�
 
 [【ArxivDay】如何优雅地每日查看Arxiv的文章？](https://www.bilibili.com/video/BV1zm41167We)
 
+## 2024年3月27日更新
+增加asyn_server.py，自此告别了非异步服务器时代。`(*^_^*)`。
+
+如要运行直接：
+```
+source arxiv/bin/activate
+arxiv/bin/python3 asyn_server.py
+```
+
 ## 如何使用？
 ### 1. 克隆仓库
 ```
@@ -214,6 +223,12 @@ CREATE TABLE arxiv_cs_lg (
 - 2024年3月24日，[ArxivDay](http://arxivday.com)上线
 - 2024年3月26日，[Github-ArxivDay](https://github.com/SeanMWX/ArxivDay)上线
 - 2024年3月27日，增加asyn服务器
+
+## TODO: fix
+1. <del>（已完成）从单一的syn server.py架构，可能会考虑NodeJS，更加合理的asyn架构</del>
+
+1. 由于数据库架构问题，重复收录paper于不同的数据库中，比如一个文章同时属于cs.AI和cs.CR，则会同时收录在两个数据库中，更改数据库架构问题，提高扩展性。
+2. 简化安装步骤，多个mysql表实在太蠢了，考虑Docker等。
 
 ## 未来功能
 1. 挑选文章 -> 全文解读 （ChatGPT接口，或者月之暗面，2M上下文）
