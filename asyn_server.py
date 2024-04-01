@@ -4,13 +4,18 @@ from aiohttp import web
 import configparser
 import aiomysql
 import asyncio
+import json
+
+class CaseSensitiveConfigParser(configparser.ConfigParser):
+    def optionxform(self, optionstr):
+        return optionstr
 
 class Config:
     """负责读取和管理配置文件的类。
     主要用于从config.ini配置文件中加载数据库连接信息、服务器端口以及其他配置项。
     """
     def __init__(self, filename='config.ini'):
-        self.config = configparser.ConfigParser()
+        self.config = CaseSensitiveConfigParser()
         self.config.read(filename)
 
     def db_config(self):
@@ -29,6 +34,12 @@ class Config:
     
     def categories_and_tables(self):
         return self.config['categories_and_tables']
+    
+    def articles_table(self):
+        return self.config['settings'].get('arxiv_table')
+    
+    def categories(self):
+        return list(dict(self.config['categories_and_tables']).keys())
 
 async def create_db_pool(loop, **db_config):
     """Creates and returns an aiomysql connection pool."""
@@ -67,7 +78,28 @@ async def fetch_articles_from_table(pool, table_name):
                 """.format(table_name), (latest_date,))  # 注意SQL注入风险
                 articles_data = await cur.fetchall()
             return articles_data
+        
+async def fetch_articles(pool, table_name):
+    async with pool.acquire() as conn:
+        async with conn.cursor(aiomysql.DictCursor) as cur:
+            # 查询最新更新日期
+            await cur.execute(f"SELECT MAX(updated) FROM {table_name}")
+            result = await cur.fetchone()
+            latest_date = result['MAX(updated)'] if result else None
 
+            articles_data = []
+            if latest_date:
+                # 根据最新更新日期查询文章信息
+                await cur.execute("""
+                    SELECT title, summary, authors, categories, comment, entry_id, 
+                           journal_ref, updated, CN_title, CN_summary
+                    FROM {}
+                    WHERE DATE(updated) = DATE(%s)
+                    ORDER BY updated DESC
+                """.format(table_name), (latest_date,))  # 注意SQL注入风险
+                articles_data = await cur.fetchall()
+            return articles_data
+        
 async def index(request):
     """Handles the index route."""
     pool = request.app['db_pool']
@@ -104,6 +136,22 @@ async def artilce_handler(request):
         'last_updated': articles[0]['updated'].strftime('%Y-%m-%d %H:%M:%S') if articles else 'N/A',
         'articles': articles, 'path': path})
 
+async def filter_artilce_handler(request):
+    path = request.match_info.get('path', "")
+    pool = request.app['db_pool']
+    config = request.app['config']
+
+    table_name = config.articles_table()
+    categories = json.dumps(config.categories())
+
+    articles = await fetch_articles(pool, table_name)
+    
+    # 这里假设articles是一个包含所有文章信息的列表
+    return aiohttp_jinja2.render_template('filter_article.html', request, {
+        'title': 'Arxiv: ' + path.upper(), 
+        'categories': categories,
+        'articles': articles, 'path': path})
+
 
 async def init_app():
     """Initializes and returns the web application."""
@@ -116,6 +164,9 @@ async def init_app():
     app['config'] = config
 
     app.router.add_get('/', index)
+
+    # articles页面
+    app.router.add_route('GET', '/articles', filter_artilce_handler)
 
     # cs.AI, cs.CR页面
     app.router.add_route('GET', '/{path}', artilce_handler)

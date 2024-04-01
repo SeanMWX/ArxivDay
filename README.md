@@ -236,3 +236,4 @@ CREATE TABLE arxiv_cs_lg (
 3. 导出文章引用（文献？）
 4. arxiv-sanity未来参考，文章推荐
 5. 知识蒸馏，知识图谱，日、月、年趋势
+6. Filter过滤器
