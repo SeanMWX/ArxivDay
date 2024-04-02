@@ -3,7 +3,7 @@ Arxiv Day 是一个自动化工具，用于从arXiv网站抓取最新的学术�
 
 [点击进入 Arxiv Day](http://arxivday.com)  
 
-[【ArxivDay】如何优雅地每日查看Arxiv的文章？](https://www.bilibili.com/video/BV1zm41167We) <b>【这篇文章只适用于Arxiv Day v1】</b>
+[【ArxivDay】如何优雅地每日查看Arxiv的文章？](https://www.bilibili.com/video/BV1zm41167We) <b>【这篇文章只适用于Arxiv Day v1】</b>，如果对Arxiv Day v1感兴趣，[请点击此处](https://github.com/SeanMWX/ArxivDay/tree/v1)。
 
 ## 2024年4月3日更新
 进入 Arxiv Day v2时代。
