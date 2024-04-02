@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Arxiv Day: Calendar</title>
+    <style>
+        body, html {
+            margin: 20;
+            padding: 0;
+            height: 100%;
+            background-color: #f0f0f2;
+            color: #333;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        .year {
+            margin-bottom: 20px;
+        }
+
+        .months-container {
+            display: flex;
+            flex-wrap: wrap;
+        }
+
+        .month {
+            width: calc(33.333% - 10px);
+            margin: 5px;
+            border: 1px solid #ccc;
+            padding: 5px;
+            box-sizing: border-box;
+        }
+
+        .days-container {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: start;
+        }
+
+        .day {
+            display: inline-block;
+            width: 14.28%; /* Approx 100 / 7 */
+            padding: 5px;
+            box-sizing: border-box;
+            text-align: center;
+        }
+
+        .has-article {
+            background-color: #90ee90; /* Light green */
+            cursor: pointer;
+        }
+        
+        .has-article a {
+            color: #000; /* Black text for visibility */
+            text-decoration: none; /* No underline */
+        }
+
+        .site-info {
+            background-color: #f1f1f1;
+            color: #333;
+            text-align: center;
+            padding: 10px 0;
+            font-size: 14px;
+        }
+
+        .content {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+            padding: 20px;
+            min-height: calc(10vh - 60px);
+            line-height: 1.5;
+        }
+        a {
+            color: #007bff;
+            text-decoration: none;
+            transition: color 0.3s ease-in-out;
+        }
+        a:hover, a:focus {
+            color: #0056b3;
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="content">
+        <h1>Welcome to Arxiv Day</h1>
+        <div class="inner-content">
+            <h2>We collect:</h2>
+            <p><a href="/articles">Click here to see all articles.</a> - Latest Update: {{ latest_update }}, Articles: {{ count }}</p>
+            <p>| 
+            {% for category in categories %}
+            {{ category }} |
+            {% endfor %}
+            </p>
+        </div>
+    </div>
+    <div id="years-container">
+        <div class="year">
+            <h2>2024</h2>
+            <div class="months-container">
+                <!-- 月份将通过JavaScript动态生成 -->
+            </div>
+        </div>
+        <div class="year">
+            <h2>2023</h2>
+            <div class="months-container">
+                <!-- 月份将通过JavaScript动态生成 -->
+            </div>
+        </div>
+    </div>
+
+    <div class="site-info">
+        By <a href="https://seanzou.com" target="_blank">Xinhai (Sean) Zou.
+    </div>
+
+    <script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const years = [2024, 2023]; // Example years
+        const datesWithArticles = ["2024-04-01", "2024-02-21", "2023-02-01"]; // Dates with articles
+        years.forEach(year => fillYear(year, datesWithArticles));
+    });
+    
+    function fillYear(year, datesWithArticles) {
+        const weekDays = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
+        const yearContainers = document.querySelectorAll('.year h2');
+        
+        yearContainers.forEach((header) => {
+            if (header.textContent.trim() == year.toString()) {
+                const monthsContainer = header.nextElementSibling;
+    
+                for (let month = 1; month <= 12; month++) {
+                    const monthDiv = document.createElement('div');
+                    monthDiv.classList.add('month');
+                    const monthString = `${year}-${month < 10 ? '0' + month : month}`;
+                    monthDiv.textContent = `${month < 10 ? '0' + month : month}-${year}`;
+    
+                    const daysContainer = document.createElement('div');
+                    daysContainer.classList.add('days-container');
+    
+                    // Add week day headers
+                    weekDays.forEach(day => {
+                        const dayHeader = document.createElement('div');
+                        dayHeader.classList.add('day');
+                        dayHeader.textContent = day;
+                        daysContainer.appendChild(dayHeader);
+                    });
+    
+                    // 获取当月天数
+                    const daysInMonth = new Date(year, month, 0).getDate();
+                    const firstDay = new Date(year, month - 1, 1).getDay();
+                    
+                    // Fill empty slots before first day of the month
+                    for (let i = 0; i < firstDay; i++) {
+                        const emptyDiv = document.createElement('div');
+                        emptyDiv.classList.add('day');
+                        daysContainer.appendChild(emptyDiv);
+                    }
+    
+                    for (let day = 1; day <= daysInMonth; day++) {
+                        const dayDiv = document.createElement('div');
+                        dayDiv.classList.add('day');
+                        const fullDateString = `${monthString}-${day < 10 ? '0' + day : day}`;
+                        dayDiv.textContent = day;
+    
+                        if (datesWithArticles.includes(fullDateString)) {
+                            dayDiv.classList.add('has-article');
+                            const link = document.createElement('a');
+                            link.href = `#`; // Link to the specific date page or function
+                            link.textContent = day;
+                            dayDiv.innerHTML = '';
+                            dayDiv.appendChild(link);
+                        }
+    
+                        daysContainer.appendChild(dayDiv);
+                    }
+    
+                    monthDiv.appendChild(daysContainer);
+                    monthsContainer.appendChild(monthDiv);
+                }
+            }
+        });
+    }
+    </script>
+</body>
+</html>
