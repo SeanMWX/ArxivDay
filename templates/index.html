@@ -54,9 +54,14 @@
         <h1>Welcome to Arxiv Day</h1>
         <div class="inner-content">
             <h2>We collect:</h2>
-            {% for category, info in categories_info.items() %}
-            <p><a href="/{{ category }}">Arxiv: {{ info.name }}</a> - Latest Update: {{ info.latest_update }}, Articles: {{ info.count }}</p>
-            {% endfor %}
+            <p>| 
+                {% for category in categories %}
+                {{ category }} |
+                {% endfor %}
+            </p>
+            <p><a href="/articles">Click here to see TODAY articles.</a></p>
+            <p><a href="/calendar">Click here to see ALL articles.</a></p>
+            <p>Latest Update: {{ latest_update }}, Articles: {{ count }}</p>
         </div>
         <div class="inner-content">
             <h2>What is Arxiv Day?</h2>

@@ -39,6 +39,8 @@ class Article:
         while retries < max_retries:
             try:
                 self.CN_title = model.prompt('请帮我翻译这个文献标题：%s' % (self.title))
+                if self.CN_title is None:
+                    raise Exception("CN_Title 未正确翻译。")
                 break
             except Exception as e:
                 retries += 1
@@ -46,8 +48,8 @@ class Article:
 
         # 检查是否超出重试次数
         if retries == max_retries:
-            print("Failed to translate {self.title} after maximum retries.")
-            self.CN_title = "Translation failed."
+            print(f"Failed to translate the TITLE of \"{self.title}\" after maximum retries.")
+            return False
 
         # 重置重试次数
         retries = 0
@@ -55,6 +57,8 @@ class Article:
         while retries < max_retries:
             try:
                 self.CN_summary = model.prompt('请帮我翻译这个文献摘要：%s' % (self.summary))
+                if self.CN_summary is None:
+                    raise Exception("CN_summary 未正确翻译。")
                 break
             except Exception as e:
                 retries += 1
@@ -62,10 +66,11 @@ class Article:
 
         # 检查是否超出重试次数
         if retries == max_retries:
-            print("Failed to translate <summary> after maximum retries.")
-            self.CN_summary = "Translation failed."
+            print(f"Failed to translate the SUMMARY of \"{self.title}\" after maximum retries.")
+            return False
             
         print("Job done.")
+        return True
 
 class ChatGPTModel:
     """
@@ -116,6 +121,12 @@ class Config:
     def max_results(self):
         return int(self.config.get('settings', 'max_results', fallback='500'))
     
+    def articles_table(self):
+        return self.config['settings'].get('arxiv_table')
+    
+    def categories(self):
+        return [category.strip() for category in self.config['settings'].get('categories').split(',')]
+    
 class Database:
     """
     数据库操作类，用于管理与MySQL数据库的连接和操作。
@@ -128,8 +139,6 @@ class Database:
         return mysql.connector.connect(**self.db_config)
     
     def article_exists(self, entry_id, table_name):
-        config = Config()
-        table_names = config.categories_and_tables().values()
         query = f"SELECT COUNT(1) FROM {table_name} WHERE entry_id = %s"
         with self.get_connection() as conn:
             cursor = conn.cursor()
@@ -159,15 +168,6 @@ def fetch_recent_articles(category, max_results=500):
 
     return articles_list
 
-def translate_articles(articles):
-    """
-    使用ChatGPT模型翻译文章标题和摘要。将获取的文章列表中的每篇文章标题和摘要送至ChatGPT进行中文翻译。
-    """
-    config = Config()
-    model = ChatGPTModel(api_key=config.api_key())
-    for article in articles:
-        article.gpt_CN_translate(model)
-
 def fetch_process_insert_articles(category, table_name, max_results):
     """
     处理文章列表：翻译和插入数据库，避免重复。集成了文章获取、翻译和插入数据库的全过程，只对数据库中不存在的新文章进行处理。
@@ -179,23 +179,26 @@ def fetch_process_insert_articles(category, table_name, max_results):
     print(f"（{datetime.now().date()}）：开始检索{category}文章...")
     articles = fetch_recent_articles(category, max_results)
 
-    insert_articles = []
+    to_translate_articles = []
     if articles:
         for article in articles:
             if not db.article_exists(article.entry_id, table_name):
-                insert_articles.append(article)
+                to_translate_articles.append(article)
     else:
         print(f"（{datetime.now().date()}）：没有获取到任何{category}文章。")
     
-    if insert_articles:
-        print(f"更新{category}文章数目为{len(insert_articles)}篇。")
+
+    insert_articles = []
+    if to_translate_articles:
+        print(f"准备翻译{category}文章数目为{len(to_translate_articles)}篇。")
         num = 0
-        for article in insert_articles:
-            print(f"Job. {num+1}/{len(insert_articles)}:") 
-            article.gpt_CN_translate(model)
-            num += 1
+        for article in to_translate_articles:
+            print(f"Job. {num+1}/{len(to_translate_articles)}:") 
+            if article.gpt_CN_translate(model):
+                num += 1
+                insert_articles.append(article)
         insert_articles_to_database(insert_articles, table_name)  # 插入新文章到数据库
-        print(f"成功更新{num}篇。")
+        print(f"成功更新{num}篇，失败{len(to_translate_articles)-num}篇。")
     else:
         print("没有新的文章需要更新。")
 
@@ -236,8 +239,8 @@ def daily_task():
     定义定时任务要执行的操作。对配置文件中指定的每个文章分类，调用`fetch_process_insert_articles`函数进行文章的抓取、处理和插入操作。
     """
     config = Config()
-    for category, table_name in config.categories_and_tables().items():
-        fetch_process_insert_articles(category, table_name, config.max_results())
+    for category in config.categories():
+        fetch_process_insert_articles(category, config.articles_table(), config.max_results())
 
 # 主程序流程
 if __name__ == "__main__":

@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="utf-8">
-    <title>{{title}}</title>
+    <title>Arxiv Day: Article</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <style>
         /* 基础重置 */
@@ -116,18 +116,53 @@
             color: #666;
             font-size: 16px;
         }
+
+        .filter-container {
+            display: flex;
+            justify-content: center; /* 居中过滤器 */
+            flex-wrap: wrap;
+            padding: 10px;
+            background-color: #eef; /* 与页眉背景色一致 */
+            margin: 20px 0; /* 增加上下外边距 */
+        }
+        .filter-option {
+            padding: 5px 15px;
+            margin: 5px;
+            background-color: #f8f9fa;
+            border-radius: 20px;
+            cursor: pointer;
+            user-select: none;
+            border: 1px solid transparent; /* 初始化边框为透明 */
+            transition: all .3s; /* 平滑过渡效果 */
+        }
+        .filter-option.active,
+        .filter-option:hover {
+            background-color: #007bff;
+            color: white;
+            border-color: #0056b3; /* 激活或悬停时变更边框颜色 */
+        }
     </style>
 </head>
 <body>
     <div class="header-info">
-        <h1>{{title}}</h1>
-        <p>Articles: {{articles_count}}</p>
-        <p>Last Updated: {{last_updated}} (+00:00)</p>
+        <pre>
+    _              _         ____              
+   / \   _ ____  _(_)_   __ |  _ \  __ _ _   _ 
+  / _ \ | '__\ \/ / \ \ / / | | | |/ _` | | | |
+ / ___ \| |   >  <| |\ V /  | |_| | (_| | |_| |
+/_/   \_\_|  /_/\_\_| \_/   |____/ \__,_|\__, |
+                                         |___/ 
+        </pre>
+        <p>Articles: <span id="articlesCount">0</span></p>
+        <p>Last Updated: <span id="lastUpdated">N/A</span> (+00:00)</p>
+        <div class="filter-container" id="filters">
+            <!-- JavaScript将在这里动态添加其他选项 -->
+    </div>        
     </div>
         <div class="content">
             <div class="inner-content">
                 {% for article in articles %}
-                    <div class="article-container">
+                <div class="article-container" data-category="{{ article.categories }}" data-updated="{{ article.updated }}">
                         <div class="article-left">
                             <h3 class="article-title">{{ article.title }}</h3>
                             <p class="article-summary">{{ article.summary }}</p>
@@ -147,5 +182,83 @@
     <div class="site-info">
         By <a href="https://seanzou.com" target="_blank">Xinhai (Sean) Zou.
     </div>
+    <script>
+        const activeFilters = new Set(); // 存储激活的过滤器
+        const articles = document.querySelectorAll('.article-container'); // 获取所有文章容器
+
+        // 示例分类数据，假设从后端获取
+        const categoriesFromBackend = JSON.parse({{ categories | tojson | safe }});
+        const filterContainer = document.getElementById('filters'); // 获取过滤器容器
+
+        // 初始化时，将所有过滤选项加入到激活的过滤器集合
+        categoriesFromBackend.forEach(category => {
+            activeFilters.add(category);
+        });
+
+        // 为每个分类创建一个过滤选项，并默认激活
+        categoriesFromBackend.forEach(category => {
+            const option = document.createElement('button'); // 创建按钮作为过滤选项
+            option.innerText = category; // 设置按钮文本
+            option.dataset.category = category; // 在按钮上设置分类数据属性
+            option.classList.add('filter-option'); // 添加样式类
+            option.addEventListener('click', () => toggleFilter(category, option)); // 添加点击事件监听器
+            filterContainer.appendChild(option); // 将按钮添加到过滤器容器中
+        });
+
+        function toggleFilter(category, optionElement) {
+            if (activeFilters.has(category)) {
+                activeFilters.delete(category); // 如果该分类已激活，从激活集合中移除
+                optionElement.classList.remove('active'); // 移除激活样式
+            } else {
+                activeFilters.add(category); // 否则，添加到激活集合
+                optionElement.classList.add('active'); // 添加激活样式
+            }
+            updateArticleVisibility(); // 更新文章的可见性
+            updateLastUpdatedTime(); // 更新最新更新时间
+        }
+
+
+        function updateArticleVisibility() {
+            let visibleArticlesCount = 0; // 初始化可见文章数量为0
+            articles.forEach(article => {
+                const articleCategories = article.dataset.category.split(','); // 确保这里使用的是正确的属性名
+                // 当没有过滤器激活时（即activeFilters.size为0），隐藏所有文章
+                const isVisible = activeFilters.size > 0 && articleCategories.some(cat => activeFilters.has(cat));
+                article.style.display = isVisible ? '' : 'none'; // 根据isVisible决定是否显示文章
+                if (isVisible) visibleArticlesCount++; // 如果文章可见，增加计数
+            });
+
+            // 更新页面上显示文章数目的元素
+            document.getElementById('articlesCount').innerText = visibleArticlesCount;
+        }
+
+        // 更新最新的更新时间
+        function updateLastUpdatedTime() {
+            let latestTime = 'N/A'; // 默认为'N/A'
+            articles.forEach(article => {
+                if (article.style.display !== 'none') { // 只考虑当前显示的文章
+                    const articleUpdated = article.dataset.updated;
+                    if (latestTime === 'N/A' || new Date(articleUpdated) > new Date(latestTime)) {
+                        latestTime = articleUpdated;
+                    }
+                }
+            });
+            // 更新页面上显示的最新更新时间
+            document.getElementById('lastUpdated').innerText = latestTime !== 'N/A' ? new Date(latestTime).toLocaleString() : 'N/A';
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            // 初始化时，激活所有过滤条件
+            document.querySelectorAll('.filter-option').forEach(option => {
+                option.classList.add('active');
+                activeFilters.add(option.dataset.category);
+            });
+
+            // 默认显示所有文章并更新最新更新时间
+            updateArticleVisibility();
+            updateLastUpdatedTime();
+        });
+
+    </script>     
 </body>
 </html>
