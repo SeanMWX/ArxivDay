@@ -112,9 +112,6 @@ class Config:
     def api_key(self):
         return self.config['chatgpt']['api_key']
     
-    def categories_and_tables(self):
-        return {f"cat:{k}": v for k, v in self.config['categories_and_tables'].items()}
-    
     def fetch_frequency(self):
         return int(self.config['schedule']['frequency_hours'])
     
