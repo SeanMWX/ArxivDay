@@ -3,16 +3,10 @@ Arxiv Day 是一个自动化工具，用于从arXiv网站抓取最新的学术�
 
 [点击进入 Arxiv Day](http://arxivday.com)  
 
-[【ArxivDay】如何优雅地每日查看Arxiv的文章？](https://www.bilibili.com/video/BV1zm41167We)
+[【ArxivDay】如何优雅地每日查看Arxiv的文章？](https://www.bilibili.com/video/BV1zm41167We) <b>【这篇文章只适用于Arxiv Day v1】</b>
 
-## 2024年3月27日更新
-增加asyn_server.py，自此告别了非异步服务器时代。`(*^_^*)`。
-
-如要运行直接：
-```
-source arxiv/bin/activate
-arxiv/bin/python3 asyn_server.py
-```
+## 2024年4月3日更新
+进入 Arxiv Day v2时代。
 
 ## 如何使用？
 ### 1. 克隆仓库
@@ -59,28 +53,24 @@ pip install -r requirements.txt
 ### 4. 修改配置文件`config.ini`
 ```
 [database]
-host=localhost              # 不用动
-user=seanzou                # 写自己的username
-password=19970308           # 写自己的密码
-database=arxiv              # 不建议动
+host=localhost                   # 不用动
+user=seanzou                     # 写自己的username
+password=19970308                # 写自己的密码
+database=arxiv                   # 不建议动
 
 [settings]
-max_results = 500           # 单次搜索最新的500篇文章
+max_results = 500                # 单次搜索最新的500篇文章
+arxiv_table=arxiv_daily          # 收录文章的表格名称见`### 5. 登录Mysql添加数据库`
+categories=cs.AI, cs.CR, cs.LG   # 需要收录的category
 
 [schedule]
-frequency_hours=2           # 每过2个小时收录一次arxiv
+frequency_hours=2                # 每过2个小时收录一次arxiv
 
 [server]
-port=80                     # web服务器在端口80打开
+port=80                          # web服务器在端口80打开
 
 [chatgpt]
-api_key=sk-xxxxxx           # 你的ChatGPT API Key
-
-[categories_and_tables]
-cs.AI=arxiv_cs_ai           # cs.AI为arxiv官网的category，arxiv_cs_ai为MySQL的table名
-cs.CR=arxiv_cs_cr           # 如上
-cs.LG=arxiv_cs_lg           # 如上
-
+api_key=sk-xxxxxx                # 你的ChatGPT API Key
 ```
 
 ### 5. 登录Mysql添加数据库
@@ -103,67 +93,9 @@ mysql -u <username> -p<password>
 CREATE DATABASE arxiv
 ```
 
-添加arxiv_*表格
+添加arxiv_daily表格
 ```
-CREATE TABLE arxiv_* (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    authors TEXT,
-    categories TEXT,
-    comment TEXT,
-    doi VARCHAR(255),
-    entry_id VARCHAR(255),
-    journal_ref VARCHAR(255),
-    links TEXT,
-    primary_category VARCHAR(255),
-    published DATETIME,
-    summary TEXT,
-    title VARCHAR(255),
-    updated DATETIME,
-    CN_title VARCHAR(255),
-    CN_summary TEXT
-);
-```
-
-例如，我们的配置文件里面是`cs.AI=arxiv_cs_ai`，`cs.CR=arxiv_cs_cr`，和`cs.LG=arxiv_cs_lg`，那么我们就需要建立3个表：
-
-```
-CREATE TABLE arxiv_cs_ai (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    authors TEXT,
-    categories TEXT,
-    comment TEXT,
-    doi VARCHAR(255),
-    entry_id VARCHAR(255),
-    journal_ref VARCHAR(255),
-    links TEXT,
-    primary_category VARCHAR(255),
-    published DATETIME,
-    summary TEXT,
-    title VARCHAR(255),
-    updated DATETIME,
-    CN_title VARCHAR(255),
-    CN_summary TEXT
-);
-
-CREATE TABLE arxiv_cs_cr (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    authors TEXT,
-    categories TEXT,
-    comment TEXT,
-    doi VARCHAR(255),
-    entry_id VARCHAR(255),
-    journal_ref VARCHAR(255),
-    links TEXT,
-    primary_category VARCHAR(255),
-    published DATETIME,
-    summary TEXT,
-    title VARCHAR(255),
-    updated DATETIME,
-    CN_title VARCHAR(255),
-    CN_summary TEXT
-);
-
-CREATE TABLE arxiv_cs_lg (
+CREATE TABLE arxiv_daily (
     id INT AUTO_INCREMENT PRIMARY KEY,
     authors TEXT,
     categories TEXT,
@@ -204,13 +136,13 @@ CREATE TABLE arxiv_cs_lg (
     对于Windows：
     ```
     .\arxiv\Scripts\activate
-    .\arxiv\Scripts\python3 server.py
+    .\arxiv\Scripts\python3 asyn_server.py
     ```
 
     对于Linux：
     ```
     source arxiv/bin/activate
-    arxiv/bin/python3 server.py
+    arxiv/bin/python3 asyn_server.py
     ```
 
 ## 注意事项
@@ -223,17 +155,19 @@ CREATE TABLE arxiv_cs_lg (
 - 2024年3月24日，[ArxivDay](http://arxivday.com)上线
 - 2024年3月26日，[Github-ArxivDay](https://github.com/SeanMWX/ArxivDay)上线
 - 2024年3月27日，增加asyn服务器[asyn_server.py](https://github.com/SeanMWX/ArxivDay/blob/main/asyn_server.py)
+- 2024年4月3日，由于迭代太快，进入了v2时代，如果从B站这个视频[【ArxivDay】如何优雅地每日查看Arxiv的文章？](https://www.bilibili.com/video/BV1zm41167We)来的，请参考下载[v1.0.1](https://github.com/SeanMWX/ArxivDay/releases/tag/v1.0.1)，v2时代合并所有category表，并且提供了一个`/calendar.html`的日历页面，在`/articles.html`的文章页面是提供了category的分类过滤器
 
 ## TODO: fix
 1. <del>（已完成）从单一的syn server.py架构，可能会考虑NodeJS，更加合理的asyn架构</del>
+2. <del>（已完成）由于数据库架构问题，重复收录paper于不同的数据库中，比如一个文章同时属于cs.AI和cs.CR，则会同时收录在两个数据库中，更改数据库架构问题，提高扩展性。</del>
 
-1. 由于数据库架构问题，重复收录paper于不同的数据库中，比如一个文章同时属于cs.AI和cs.CR，则会同时收录在两个数据库中，更改数据库架构问题，提高扩展性。
-2. 简化安装步骤，多个mysql表实在太蠢了，考虑Docker等。
+1. 简化安装步骤，多个mysql表实在太蠢了，考虑Docker等。
 
 ## 未来功能
+1. <del>（已完成）选取日期，当前不能选取日期很奇怪</del>
+2. <del>（已完成）Filter过滤器</del>
+
 1. 挑选文章 -> 全文解读 （ChatGPT接口，或者月之暗面，2M上下文）
-2. 选取日期，当前不能选取日期很奇怪
-3. 导出文章引用（文献？）
-4. arxiv-sanity未来参考，文章推荐
-5. 知识蒸馏，知识图谱，日、月、年趋势
-6. Filter过滤器
+2. 导出文章引用（文献？）
+3. arxiv-sanity未来参考，文章推荐
+4. 知识蒸馏，知识图谱，日、月、年趋势 
