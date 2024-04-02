@@ -31,6 +31,8 @@ class Config:
         return self.config['categories_and_tables']
 
 async def create_db_pool(loop, **db_config):
+    db_config['pool_recycle'] = 3600
+    db_config['autocommit'] = True # To update connection between server and database
     """Creates and returns an aiomysql connection pool."""
     return await aiomysql.create_pool(loop=loop, **db_config)
 
