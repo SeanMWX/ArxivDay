@@ -109,7 +109,7 @@ CREATE TABLE arxiv_daily (
     summary TEXT,
     title VARCHAR(255),
     updated DATETIME,
-    CN_title VARCHAR(255),
+    CN_title TEXT,
     CN_summary TEXT
 );
 ```
