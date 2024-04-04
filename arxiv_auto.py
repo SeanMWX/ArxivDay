@@ -174,7 +174,21 @@ def fetch_process_insert_articles(category, table_name, max_results):
     db = Database(config.db_config())
 
     print(f"（{datetime.now().date()}）：开始检索{category}文章...")
-    articles = fetch_recent_articles(category, max_results)
+    max_retries = 3  # 设置最大重试次数
+    retries = 0
+    # 检索文章
+    while retries < max_retries:
+        try:
+            articles = fetch_recent_articles(category, max_results)
+            break
+        except Exception as e:
+            retries += 1
+            print(f"An error occurred: {e}, Retrying... ({retries}/{max_retries})")
+
+    # 检查是否超出重试次数
+    if retries == max_retries:
+        print(f"无法正确从Arxiv.org获取文章。")
+        return False
 
     to_translate_articles = []
     if articles:
