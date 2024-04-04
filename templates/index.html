@@ -47,6 +47,30 @@
             color: #0056b3;
             text-decoration: underline;
         }
+
+        .table-container {
+            width: 100%;
+            overflow-x: auto;  /* 对于宽表格进行滚动 */
+            text-align: center; /* 中心对齐表格 */
+        }
+
+        .table-container table {
+            margin: 0 auto; /* 居中表格 */
+            border-collapse: collapse; /* 边框合并 */
+            width: auto; /* 根据内容自动调整宽度 */
+            background-color: #fff; /* 白色背景 */
+        }
+
+        .table-container th, .table-container td {
+            border: 1px solid #ccc; /* 边框颜色 */
+            padding: 8px; /* 内部填充 */
+            text-align: left; /* 文字左对齐 */
+        }
+
+        .table-container th {
+            background-color: #f4f4f4; /* 表头背景色 */
+            font-weight: bold; /* 粗体文本 */
+        }
     </style>
 </head>
 <body>
@@ -54,11 +78,20 @@
         <h1>Welcome to Arxiv Day</h1>
         <div class="inner-content">
             <h2>We collect:</h2>
-            <p>| 
-                {% for category in categories %}
-                {{ category }} |
-                {% endfor %}
-            </p>
+            <div class="table-container">
+                <table>
+                    <tr>
+                        <th>Category</th>
+                        <th>Total</th>
+                    </tr>
+                    {% for category, count in categories_info.items() %}
+                    <tr>
+                        <td>{{ category }}</td>
+                        <td>{{ count }}</td>
+                    </tr>
+                    {% endfor %}
+                </table>
+            </div>
             <p><a href="/articles">Click here to see TODAY articles.</a></p>
             <p><a href="/calendar">Click here to see ALL articles.</a></p>
             <p>Latest Update: {{ latest_update }}, Articles: {{ count }}</p>

@@ -78,13 +78,26 @@ async def fetch_articles(pool, table_name):
                 articles_data = await cur.fetchall()
             return articles_data
         
+async def get_article_count_by_category(pool, table_name, category):
+    async with pool.acquire() as conn:
+        async with conn.cursor(aiomysql.DictCursor) as cur:
+            await cur.execute(f"SELECT COUNT(*) AS count FROM {table_name} WHERE categories LIKE %s", (f'%{category}%',))
+            result = await cur.fetchone()
+    return result['count'] if result else 0
+        
 async def index(request):
     """Handles the index route."""
     pool = request.app['db_pool']
     config = request.app['config']
+    table_name = config.articles_table()
     categories = config.categories()
-    latest_update, count = await get_latest_article_date_and_count(pool, config.articles_table())
-    return aiohttp_jinja2.render_template('index.html', request, {'title': 'Arxiv Day', 'categories': categories, 'latest_update': latest_update, 'count': count})
+    latest_update, count = await get_latest_article_date_and_count(pool, table_name)
+    categories_info = {category: await get_article_count_by_category(pool, table_name, category) for category in categories}
+    return aiohttp_jinja2.render_template('index.html', request, {
+        'title': 'Arxiv Day', 
+        'latest_update': latest_update, 
+        'count': count,
+        'categories_info': categories_info})
 
 async def handle_404(request):
     return aiohttp_jinja2.render_template('404.html', request, {}, status=404)
