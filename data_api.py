@@ -4,7 +4,7 @@ import asyncio
 from typing import Optional
 
 import aiomysql
-from fastapi import FastAPI, Query
+from fastapi import FastAPI, Query, Depends, Header, HTTPException, Request, status
 import uvicorn
 
 
@@ -30,7 +30,7 @@ class Config:
             "db": os.getenv("DB_NAME", cfg.get("database")),
             "charset": cfg.get("charset", fallback="utf8mb4"),
             "autocommit": True,
-            "pool_recycle": 3600,
+            "pool_recycle": 3600
         }
 
     def articles_table(self) -> str:
@@ -39,6 +39,14 @@ class Config:
     def categories(self):
         raw = self.config["settings"].get("categories", "")
         return [c.strip() for c in raw.split(",") if c.strip()]
+
+    def api_key(self) -> str:
+        key = os.getenv("API_KEY")
+        if not key and self.config.has_section("api"):
+            key = self.config["api"].get("key")
+        if not key:
+            raise RuntimeError("API key not configured. Set API_KEY env or [api].key in config.ini")
+        return key
 
 
 async def create_pool(loop, db_config: dict):
@@ -49,12 +57,14 @@ config = Config()
 app = FastAPI(title="Arxiv Day Data API", version="1.0.0")
 app.state.pool = None
 app.state.table = config.articles_table()
+app.state.api_key = None
 
 
 @app.on_event("startup")
 async def startup_event():
     loop = asyncio.get_running_loop()
     app.state.pool = await create_pool(loop, config.db_config())
+    app.state.api_key = config.api_key()
 
 
 @app.on_event("shutdown")
@@ -63,6 +73,18 @@ async def shutdown_event():
     if pool:
         pool.close()
         await pool.wait_closed()
+
+
+async def verify_api_key(
+    request: Request,
+    api_key: Optional[str] = Header(None, alias="X-API-Key"),
+):
+    expected = request.app.state.api_key
+    if not api_key or api_key != expected:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or missing API key",
+        )
 
 
 @app.get("/")
@@ -101,13 +123,31 @@ async def count_by_category(pool, table: str, category: str, date: str) -> int:
             return row["count"] if row else 0
 
 
+@app.get("/")
+async def root(auth=Depends(verify_api_key)):
+    return {
+        "name": "Arxiv Day Data API",
+        "version": "1.0.0",
+        "endpoints": {
+            "health": "/health",
+            "latest": "/latest",
+            "articles": "/articles?date=YYYY-MM-DD&category=cs.AI&page=1&page_size=50",
+            "calendar": "/calendar",
+            "categories": "/categories",
+            "categories_counts": "/categories/counts?date=YYYY-MM-DD",
+        },
+        "auth": "Pass X-API-Key header with the configured key.",
+        "note": "All endpoints are read-only. Date defaults to latest when omitted.",
+    }
+
+
 @app.get("/health")
-async def health():
+async def health(auth=Depends(verify_api_key)):
     return {"status": "ok"}
 
 
 @app.get("/latest")
-async def latest():
+async def latest(auth=Depends(verify_api_key)):
     pool = app.state.pool
     table = app.state.table
     latest_date = await fetch_latest_date(pool, table)
@@ -130,6 +170,7 @@ async def articles(
     category: Optional[str] = None,
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=100),
+    auth=Depends(verify_api_key),
 ):
     pool = app.state.pool
     table = app.state.table
@@ -178,7 +219,7 @@ async def articles(
 
 
 @app.get("/calendar")
-async def calendar():
+async def calendar(auth=Depends(verify_api_key)):
     pool = app.state.pool
     table = app.state.table
     async with pool.acquire() as conn:
@@ -195,12 +236,12 @@ async def calendar():
 
 
 @app.get("/categories")
-async def categories():
+async def categories(auth=Depends(verify_api_key)):
     return {"categories": config.categories()}
 
 
 @app.get("/categories/counts")
-async def categories_counts(date: Optional[str] = None):
+async def categories_counts(date: Optional[str] = None, auth=Depends(verify_api_key)):
     pool = app.state.pool
     table = app.state.table
     target_date = date or await fetch_latest_date(pool, table)
