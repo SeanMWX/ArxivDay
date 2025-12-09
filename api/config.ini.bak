@@ -5,19 +5,8 @@ password=<YOUR-DATABASE-PASSWORD-HERE>
 database=arxiv
 
 [settings]
-max_results=5
 arxiv_table=arxiv_daily
 categories=cs.AI, cs.CR, cs.LG
 
-
-[schedule]
-frequency_hours=2
-
-[server]
-port=80
-
-[chatgpt]
-api_key=<YOUR-OPENAI-API-KEY-HERE>
-
 [api]
-key=your_api_key_here
+key=<MAKE_YOUR_OWN_KEY_HERE>

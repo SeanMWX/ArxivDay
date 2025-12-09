@@ -87,23 +87,6 @@ async def verify_api_key(
         )
 
 
-@app.get("/")
-async def root():
-    return {
-        "name": "Arxiv Day Data API",
-        "version": "1.0.0",
-        "endpoints": {
-            "health": "/health",
-            "latest": "/latest",
-            "articles": "/articles?date=2025-12-08&category=cs.AI&page=1&page_size=50",
-            "calendar": "/calendar",
-            "categories": "/categories",
-            "categories_counts": "/categories/counts?date=2025-12-08",
-        },
-        "note": "All endpoints are read-only. Date defaults to latest when omitted.",
-    }
-
-
 async def fetch_latest_date(pool, table: str) -> Optional[str]:
     async with pool.acquire() as conn:
         async with conn.cursor(aiomysql.DictCursor) as cur:
@@ -131,13 +114,13 @@ async def root(auth=Depends(verify_api_key)):
         "endpoints": {
             "health": "/health",
             "latest": "/latest",
-            "articles": "/articles?date=YYYY-MM-DD&category=cs.AI&page=1&page_size=50",
+            "articles": "/articles?date=YYYY-MM-DD&category=cs.AI&page=1&page_size=1000",
             "calendar": "/calendar",
             "categories": "/categories",
             "categories_counts": "/categories/counts?date=YYYY-MM-DD",
         },
         "auth": "Pass X-API-Key header with the configured key.",
-        "note": "All endpoints are read-only. Date defaults to latest when omitted.",
+        "note": "All endpoints are read-only. Date defaults to latest when omitted. page_size has no enforced upper limit—use responsibly.",
     }
 
 
@@ -169,7 +152,7 @@ async def articles(
     date: Optional[str] = None,
     category: Optional[str] = None,
     page: int = Query(1, ge=1),
-    page_size: int = Query(50, ge=1, le=100),
+    page_size: int = Query(200, ge=1),
     auth=Depends(verify_api_key),
 ):
     pool = app.state.pool

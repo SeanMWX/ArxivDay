@@ -1,0 +1,6 @@
+[server]
+port=80
+
+[api]
+base_url=<YOUR_API_URL>
+key=<YOUR_API_KEY>
