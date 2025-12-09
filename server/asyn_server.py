@@ -1,202 +1,168 @@
+import os
+import json
+import configparser
+from datetime import datetime
+
+import aiohttp
 import aiohttp_jinja2
 import jinja2
 from aiohttp import web
-import configparser
-import aiomysql
-import asyncio
-import json
+
 
 class CaseSensitiveConfigParser(configparser.ConfigParser):
     def optionxform(self, optionstr):
         return optionstr
 
+
 class Config:
-    """负责读取和管理配置文件的类。
-    主要用于从config.ini配置文件中加载数据库连接信息、服务器端口以及其他配置项。
-    """
-    def __init__(self, filename='config.ini'):
+    """Load server and API settings from config.ini or env."""
+
+    def __init__(self, filename: str = "config.ini"):
         self.config = CaseSensitiveConfigParser()
         self.config.read(filename)
 
-    def db_config(self):
-        config = self.config['database']
-        return {
-            'host': config.get('host'),
-            'port': int(config.get('port', 3306)),
-            'user': config.get('user'),
-            'password': config.get('password'),
-            'db': config.get('database'), 
-            'charset': 'utf8mb4',
-        }
+    def server_port(self) -> int:
+        return int(self.config["server"].get("port", 80))
 
-    def server_port(self):
-        return int(self.config['server'].get('port', 80))
-    
-    def articles_table(self):
-        return self.config['settings'].get('arxiv_table')
-    
-    def categories(self):
-        return [category.strip() for category in self.config['settings'].get('categories').split(',')]
+    def api_base_url(self) -> str:
+        base = os.getenv("API_BASE_URL") or self.config["api"].get("base_url", "")
+        base = base.rstrip("/")
+        if not base:
+            raise RuntimeError("API base_url not configured")
+        return base
 
-async def create_db_pool(loop, **db_config):
-    """Creates and returns an aiomysql connection pool."""
-    db_config['pool_recycle'] = 3600
-    db_config['autocommit'] = True # To update connection between server and database
-    return await aiomysql.create_pool(loop=loop, **db_config)
+    def api_key(self) -> str:
+        key = os.getenv("API_KEY") or self.config["api"].get("key")
+        if not key:
+            raise RuntimeError("API key not configured")
+        return key
 
-async def get_latest_article_date_and_count(pool, table_name):
-    """Fetches the latest article date and count from the specified table."""
-    async with pool.acquire() as conn:
-        async with conn.cursor(aiomysql.DictCursor) as cur:
-            await cur.execute(f"SELECT MAX(DATE(updated)) as latest_date FROM {table_name}")
-            result = await cur.fetchone()
-            latest_date = result['latest_date'] if result else 'N/A'
-            
-            await cur.execute(f"SELECT COUNT(*) as count FROM {table_name} WHERE DATE(updated) = %s", (latest_date,))
-            count_result = await cur.fetchone()
-            count = count_result['count'] if count_result else 0
-    return latest_date, count
-        
-async def fetch_articles(pool, table_name):
-    async with pool.acquire() as conn:
-        async with conn.cursor(aiomysql.DictCursor) as cur:
-            # 查询最新更新日期
-            await cur.execute(f"SELECT MAX(updated) FROM {table_name}")
-            result = await cur.fetchone()
-            latest_date = result['MAX(updated)'] if result else None
 
-            articles_data = []
-            if latest_date:
-                # 根据最新更新日期查询文章信息
-                await cur.execute("""
-                    SELECT title, summary, authors, categories, comment, entry_id, 
-                           journal_ref, updated, CN_title, CN_summary
-                    FROM {}
-                    WHERE DATE(updated) = DATE(%s)
-                    ORDER BY updated DESC
-                """.format(table_name), (latest_date,))  # 注意SQL注入风险
-                articles_data = await cur.fetchall()
-            return articles_data
-        
-async def get_article_count_by_category(pool, table_name, category):
-    async with pool.acquire() as conn:
-        async with conn.cursor(aiomysql.DictCursor) as cur:
-            await cur.execute(f"SELECT COUNT(*) AS count FROM {table_name} WHERE categories LIKE %s", (f'%{category}%',))
-            result = await cur.fetchone()
-    return result['count'] if result else 0
-        
+async def api_get(app, path: str, params=None):
+    """Call data API and return JSON, raising 502 on failure."""
+    session: aiohttp.ClientSession = app["http_session"]
+    base = app["api_base"]
+    url = f"{base}{path}" if path.startswith("/") else f"{base}/{path}"
+    try:
+        async with session.get(url, params=params) as resp:
+            if resp.status != 200:
+                text = await resp.text()
+                raise web.HTTPBadGateway(reason=f"API {resp.status}: {text}")
+            return await resp.json()
+    except Exception as exc:
+        raise web.HTTPBadGateway(reason=f"API request failed: {exc}") from exc
+
+
+def parse_updated_field(items):
+    """Convert string timestamps to datetime for template strftime usage."""
+    for item in items:
+        ts = item.get("updated")
+        if ts and isinstance(ts, str):
+            ts_clean = ts.rstrip("Z")
+            try:
+                item["updated"] = datetime.fromisoformat(ts_clean)
+            except Exception:
+                pass
+    return items
+
+
 async def index(request):
-    """Handles the index route."""
-    pool = request.app['db_pool']
-    config = request.app['config']
-    table_name = config.articles_table()
-    categories = config.categories()
-    latest_update, count = await get_latest_article_date_and_count(pool, table_name)
-    categories_info = {category: await get_article_count_by_category(pool, table_name, category) for category in categories}
-    return aiohttp_jinja2.render_template('index.html', request, {
-        'title': 'Arxiv Day', 
-        'latest_update': latest_update, 
-        'count': count,
-        'categories_info': categories_info})
+    app = request.app
+    latest_resp = await api_get(app, "/latest")
+    latest_update = latest_resp.get("date")
+    count = latest_resp.get("count", 0)
+
+    categories_resp = await api_get(app, "/categories")
+    categories = categories_resp.get("categories", [])
+
+    counts_resp = await api_get(app, "/categories/counts", params={"date": latest_update} if latest_update else None)
+    categories_info = {item["category"]: item.get("count", 0) for item in counts_resp.get("items", [])}
+    for cat in categories:
+        categories_info.setdefault(cat, 0)
+
+    return aiohttp_jinja2.render_template(
+        "index.html",
+        request,
+        {"title": "Arxiv Day", "latest_update": latest_update, "count": count, "categories_info": categories_info},
+    )
+
 
 async def handle_404(request):
-    return aiohttp_jinja2.render_template('404.html', request, {}, status=404)
+    return aiohttp_jinja2.render_template("404.html", request, {}, status=404)
 
-async def artilce_handler(request):
-    path = request.match_info.get('path', "")
-    pool = request.app['db_pool']
-    config = request.app['config']
-    selected_date = request.query.get('date')
 
-    table_name = config.articles_table()
-    categories = json.dumps(config.categories())
+async def article_handler(request):
+    app = request.app
+    selected_date = request.query.get("date")
 
+    categories_resp = await api_get(app, "/categories")
+    categories = categories_resp.get("categories", [])
+
+    # Fetch a large batch (API has no enforced upper cap now)
+    params = {"page_size": 1000}
     if selected_date:
-        articles = await fetch_articles_by_date(pool, table_name, selected_date)
-    else:
-        articles = await fetch_articles(pool, table_name)
-    
-    # 这里假设articles是一个包含所有文章信息的列表
-    return aiohttp_jinja2.render_template('article.html', request, {
-        'title': 'Arxiv: ' + path.upper(), 
-        'categories': categories,
-        'articles': articles, 'path': path})
+        params["date"] = selected_date
 
-async def fetch_articles_by_date(pool, table_name, date):
-    async with pool.acquire() as conn:
-        async with conn.cursor(aiomysql.DictCursor) as cur:
-            await cur.execute(f"""
-                SELECT title, summary, authors, categories, comment, entry_id, 
-                       journal_ref, updated, CN_title, CN_summary
-                FROM {table_name}
-                WHERE DATE(updated) = %s
-                ORDER BY updated DESC
-            """, (date,))
-            articles_data = await cur.fetchall()
-    return articles_data
+    articles_resp = await api_get(app, "/articles", params=params)
+    articles = parse_updated_field(articles_resp.get("items", []))
 
-async def fetch_years_with_articles(pool, table_name):
-    async with pool.acquire() as conn:
-        async with conn.cursor(aiomysql.DictCursor) as cur:
-            await cur.execute(f"SELECT DISTINCT YEAR(updated) AS year FROM {table_name} ORDER BY year DESC")
-            years_data = await cur.fetchall()
-    return [entry['year'] for entry in years_data if entry['year']]
-
-async def fetch_days_with_articles(pool, table_name):
-    async with pool.acquire() as conn:
-        async with conn.cursor(aiomysql.DictCursor) as cur:
-            await cur.execute(f"""
-                SELECT DISTINCT DATE(updated) AS day
-                FROM {table_name}
-                ORDER BY day DESC
-            """)
-            days_data = await cur.fetchall()
-    # 将日期对象转换为字符串
-    return [entry['day'].strftime('%Y-%m-%d') for entry in days_data if entry['day']]
+    return aiohttp_jinja2.render_template(
+        "article.html",
+        request,
+        {
+            "title": "Arxiv: TODAY" if not selected_date else f"Arxiv: {selected_date}",
+            "categories": json.dumps(categories),
+            "articles": articles,
+            "path": "",
+        },
+    )
 
 
 async def calendar_handler(request):
-    pool = request.app['db_pool']
-    config = request.app['config']
-    categories = config.categories()
-    table_name = config.articles_table()
-    days_with_articles = await fetch_days_with_articles(pool, table_name)
-    years_with_articles = await fetch_years_with_articles(pool, table_name)
+    app = request.app
 
-    return aiohttp_jinja2.render_template('calendar.html', request, {
-        'title': 'Arxiv Day: Calendar',
-        'categories': categories,
-        'years_with_articles': years_with_articles,
-        'days_with_articles': days_with_articles
-    })
+    categories_resp = await api_get(app, "/categories")
+    categories = categories_resp.get("categories", [])
 
+    calendar_resp = await api_get(app, "/calendar")
+    years_with_articles = calendar_resp.get("years", [])
+    days_with_articles = calendar_resp.get("days", [])
+
+    return aiohttp_jinja2.render_template(
+        "calendar.html",
+        request,
+        {
+            "title": "Arxiv Day: Calendar",
+            "categories": categories,
+            "years_with_articles": years_with_articles,
+            "days_with_articles": days_with_articles,
+        },
+    )
 
 
 async def init_app():
-    """Initializes and returns the web application."""
+    """Initializes and returns the web application backed by the data API."""
     app = web.Application()
-    aiohttp_jinja2.setup(app, loader=jinja2.FileSystemLoader('templates'))
-    config = Config('config.ini')
-    loop = asyncio.get_running_loop()
-    db_pool = await create_db_pool(loop, **config.db_config())
-    app['db_pool'] = db_pool
-    app['config'] = config
+    aiohttp_jinja2.setup(app, loader=jinja2.FileSystemLoader("templates"))
+    cfg = Config("config.ini")
 
-    # index页面
-    app.router.add_get('/', index)
+    app["config"] = cfg
+    app["api_base"] = cfg.api_base_url()
+    app["http_session"] = aiohttp.ClientSession(headers={"X-API-Key": cfg.api_key()})
 
-    # articles页面
-    app.router.add_route('GET', '/articles', artilce_handler)
+    app.router.add_get("/", index)
+    app.router.add_get("/articles", article_handler)
+    app.router.add_get("/calendar", calendar_handler)
+    app.router.add_get("/{tail:.*}", handle_404)
 
-    # calendar页面
-    app.router.add_get('/calendar', calendar_handler)
+    async def close_session(app):
+        await app["http_session"].close()
 
-    # 404页面渲染
-    app.router.add_get('/{tail:.*}', handle_404)
-
+    app.on_cleanup.append(close_session)
     return app
 
+
 if __name__ == "__main__":
-    port = Config('config.ini').server_port()
+    port = Config("config.ini").server_port()
     app = init_app()
     web.run_app(app, port=port)

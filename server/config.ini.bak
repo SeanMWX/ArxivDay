@@ -1,12 +1,6 @@
-[database]
-host=<YOUR-DATABASE-HOST-HERE>
-user=<YOUR-DATABASE-USER-HERE>
-password=<YOUR-DATABASE-PASSWORD-HERE>
-database=arxiv
-
-[settings]
-arxiv_table=arxiv_daily
-categories=cs.AI, cs.CR, cs.LG
-
 [server]
 port=80
+
+[api]
+base_url=<YOUR_API_URL>
+key=<YOUR_API_KEY>
