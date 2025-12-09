@@ -150,6 +150,26 @@ async def favorites_handler(request):
     )
 
 
+async def archive_handler(request):
+    return aiohttp_jinja2.render_template(
+        "archive.html",
+        request,
+        {
+            "title": "Archived Favorites",
+        },
+    )
+
+
+async def storage_handler(request):
+    return aiohttp_jinja2.render_template(
+        "storage.html",
+        request,
+        {
+            "title": "Local Storage",
+        },
+    )
+
+
 async def init_app():
     """Initializes and returns the web application backed by the data API."""
     app = web.Application()
@@ -164,6 +184,8 @@ async def init_app():
     app.router.add_get("/articles", article_handler)
     app.router.add_get("/calendar", calendar_handler)
     app.router.add_get("/favorites", favorites_handler)
+    app.router.add_get("/archive", archive_handler)
+    app.router.add_get("/storage", storage_handler)
     app.router.add_get("/{tail:.*}", handle_404)
 
     async def close_session(app):

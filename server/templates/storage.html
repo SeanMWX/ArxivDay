@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>{{ title }}</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            background-color: #f0f0f2;
+            color: #333;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        .content {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: left;
+            padding: 20px;
+            min-height: calc(100vh - 60px);
+            line-height: 1.5;
+        }
+        .inner-content {
+            max-width: 1200px;
+            width: 100%;
+            background: #fff;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            padding: 20px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+        textarea {
+            width: 100%;
+            min-height: 200px;
+            font-family: monospace;
+            box-sizing: border-box;
+        }
+        button {
+            margin-right: 8px;
+            padding: 6px 10px;
+            border: 1px solid #007bff;
+            background: #fff;
+            color: #007bff;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button.danger {
+            border-color: #d9534f;
+            color: #d9534f;
+        }
+    </style>
+</head>
+<body>
+    <div class="content">
+        <h1>Local Storage Dump</h1>
+        <p><a href="/">Index</a> | <a href="/articles">Articles</a> | <a href="/calendar">Calendar</a> | <a href="/favorites">Favorites</a> | <a href="/archive">Archive</a></p>
+        <div class="inner-content">
+            <p>当前条目：<span id="count"></span> （包含已归档与未归档）</p>
+            <button id="exportBtn" type="button">导出 JSON</button>
+            <button id="importBtn" type="button">导入 JSON</button>
+            <button id="clearBtn" type="button" class="danger">清空</button>
+            <textarea id="ioArea" placeholder="导出内容会显示在这里；粘贴JSON后点击导入"></textarea>
+        </div>
+    </div>
+    <script>
+        const FAVORITES_KEY = 'arxivFavorites';
+
+        function loadFavorites() {
+            try {
+                return JSON.parse(localStorage.getItem(FAVORITES_KEY) || '[]');
+            } catch (e) {
+                return [];
+            }
+        }
+
+        function saveFavorites(list) {
+            localStorage.setItem(FAVORITES_KEY, JSON.stringify(list));
+        }
+
+        function renderDump() {
+            const list = loadFavorites();
+            document.getElementById('count').innerText = list.length;
+            document.getElementById('ioArea').value = JSON.stringify({
+                version: 1,
+                exported_at: new Date().toISOString(),
+                items: list,
+            }, null, 2);
+        }
+
+        document.getElementById('exportBtn').addEventListener('click', () => {
+            renderDump();
+            document.getElementById('ioArea').select();
+        });
+
+        document.getElementById('importBtn').addEventListener('click', () => {
+            const area = document.getElementById('ioArea');
+            if (!area.value.trim()) return;
+            try {
+                const parsed = JSON.parse(area.value);
+                const items = Array.isArray(parsed) ? parsed : parsed.items;
+                if (!items || !Array.isArray(items)) throw new Error('格式错误');
+                saveFavorites(items);
+                alert('导入成功');
+                renderDump();
+            } catch (e) {
+                alert('导入失败，请检查JSON格式');
+            }
+        });
+
+        document.getElementById('clearBtn').addEventListener('click', () => {
+            if (confirm('确定清空所有本地数据？')) {
+                saveFavorites([]);
+                renderDump();
+            }
+        });
+
+        renderDump();
+    </script>
+</body>
+</html>

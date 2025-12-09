@@ -43,28 +43,8 @@
             border-bottom: 1px solid #e0e0e0;
             padding-bottom: 15px;
         }
-        .article-left, .article-right {
-            width: 48%;
-        }
-        .article-title, .article-summary {
-            margin: 5px 0;
-        }
-        .actions {
-            margin: 10px 0;
-        }
-        button {
-            margin-right: 8px;
-            padding: 6px 10px;
-            border: 1px solid #007bff;
-            background: #fff;
-            color: #007bff;
-            border-radius: 4px;
-            cursor: pointer;
-        }
-        button.danger {
-            border-color: #d9534f;
-            color: #d9534f;
-        }
+        .article-left, .article-right { width: 48%; }
+        .article-title, .article-summary { margin: 5px 0; }
         .favorite-btn {
             margin-top: 8px;
             padding: 6px 10px;
@@ -74,11 +54,6 @@
             border-radius: 4px;
             cursor: pointer;
             transition: all .2s;
-        }
-        .favorite-btn.active {
-            background: #ffd700;
-            border-color: #e0b200;
-            color: #000;
         }
         .tag-input, .note-input {
             width: 100%;
@@ -96,11 +71,10 @@
 </head>
 <body>
     <div class="content">
-        <h1>My Favorites</h1>
-        <p><a href="/">Index</a> | <a href="/articles">Articles</a> | <a href="/calendar">Calendar</a> | <a href="/archive">Archive</a></p>
+        <h1>Archived</h1>
+        <p><a href="/">Index</a> | <a href="/articles">Articles</a> | <a href="/calendar">Calendar</a> | <a href="/favorites">Favorites</a></p>
         <div class="inner-content">
-            <h2>已收藏</h2>
-            <div id="favList"></div>
+            <div id="archivedList"></div>
         </div>
     </div>
     <script>
@@ -118,11 +92,11 @@
             localStorage.setItem(FAVORITES_KEY, JSON.stringify(list));
         }
 
-        function renderFavorites() {
-            const list = loadFavorites().filter(it => !it.archived);
-            const container = document.getElementById('favList');
+        function renderArchived() {
+            const list = loadFavorites().filter(it => it.archived);
+            const container = document.getElementById('archivedList');
             if (!list.length) {
-                container.innerHTML = '<p>暂无收藏。</p>';
+                container.innerHTML = '<p>暂无归档内容。</p>';
                 return;
             }
             container.innerHTML = '';
@@ -144,8 +118,8 @@
                         <p><i>下载: <a href="${item.entry_id}" target="_blank">${item.entry_id}</a></i></p>
                         <label>标签(逗号分隔): <input class="tag-input" type="text" value="${item.tags || ''}" data-entry-id="${item.entry_id}"></label>
                         <label>笔记:<textarea class="note-input" data-entry-id="${item.entry_id}">${item.note || ''}</textarea></label>
-                        <button class="favorite-btn active" type="button" data-entry-id="${item.entry_id}">取消收藏</button>
-                        <button class="favorite-btn" type="button" data-entry-id="${item.entry_id}" data-archive="1">归档</button>
+                        <button class="favorite-btn" type="button" data-entry-id="${item.entry_id}">移出归档</button>
+                        <button class="favorite-btn" type="button" data-entry-id="${item.entry_id}" data-remove="1">删除</button>
                     </div>
                 `;
                 container.appendChild(div);
@@ -157,13 +131,13 @@
                     let listNow = loadFavorites();
                     const target = listNow.find(it => it.entry_id === entryId);
                     if (!target) return;
-                    if (btn.dataset.archive === '1') {
-                        target.archived = true;
-                    } else {
+                    if (btn.dataset.remove === '1') {
                         listNow = listNow.filter(it => it.entry_id !== entryId);
+                    } else {
+                        target.archived = false;
                     }
                     saveFavorites(listNow);
-                    renderFavorites();
+                    renderArchived();
                 });
             });
 
@@ -181,7 +155,7 @@
             });
         }
 
-        renderFavorites();
+        renderArchived();
     </script>
 </body>
 </html>
