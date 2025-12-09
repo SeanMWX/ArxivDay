@@ -1,0 +1,12 @@
+[database]
+host=<YOUR-DATABASE-HOST-HERE>
+user=<YOUR-DATABASE-USER-HERE>
+password=<YOUR-DATABASE-PASSWORD-HERE>
+database=arxiv
+
+[settings]
+arxiv_table=arxiv_daily
+categories=cs.AI, cs.CR, cs.LG
+
+[api]
+key=<MAKE_YOUR_OWN_KEY_HERE>

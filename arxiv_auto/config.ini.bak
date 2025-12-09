@@ -1,0 +1,16 @@
+[database]
+host=<YOUR-DATABASE-HOST-HERE>
+user=<YOUR-DATABASE-USER-HERE>
+password=<YOUR-DATABASE-PASSWORD-HERE>
+database=arxiv
+
+[settings]
+max_results=3
+arxiv_table=arxiv_daily
+categories=cs.AI, cs.CR, cs.LG
+
+[schedule]
+frequency_hours=2
+
+[chatgpt]
+api_key=<YOUR-OPENAI-API-KEY-HERE>
