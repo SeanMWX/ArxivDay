@@ -1,1 +1,34 @@
-config.ini
+# Local secrets/config
+# contains DB/API keys
+config.ini  
+# environment variable overrides
+.env        
+# pyenv/poetry version pin
+.python-version  
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Python artifacts
+__pycache__/
+*.py[cod]
+*.pyo
+*.log        # runtime/test logs
+*.egg-info/  # packaging metadata
+build/
+dist/
+htmlcov/
+.coverage
+
+# Tool caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# IDE/editor
+.idea/
+.vscode/
+.ipynb_checkpoints
+.DS_Store
