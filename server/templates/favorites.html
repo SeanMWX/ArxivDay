@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>{{ title }}</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            background-color: #f0f0f2;
+            color: #333;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        .content {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: left;
+            padding: 20px;
+            min-height: calc(100vh - 60px);
+            line-height: 1.5;
+        }
+        .inner-content {
+            max-width: 1200px;
+            width: 100%;
+            background: #fff;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            padding: 20px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+        a {
+            color: #007bff;
+            text-decoration: none;
+        }
+        a:hover { color: #0056b3; text-decoration: underline; }
+        .article-container {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 20px;
+            border-bottom: 1px solid #e0e0e0;
+            padding-bottom: 15px;
+        }
+        .article-left, .article-right {
+            width: 48%;
+        }
+        .article-title, .article-summary {
+            margin: 5px 0;
+        }
+        .actions {
+            margin: 10px 0;
+        }
+        button {
+            margin-right: 8px;
+            padding: 6px 10px;
+            border: 1px solid #007bff;
+            background: #fff;
+            color: #007bff;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button.danger {
+            border-color: #d9534f;
+            color: #d9534f;
+        }
+        .favorite-btn {
+            margin-top: 8px;
+            padding: 6px 10px;
+            border: 1px solid #007bff;
+            background: #fff;
+            color: #007bff;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all .2s;
+        }
+        .favorite-btn.active {
+            background: #ffd700;
+            border-color: #e0b200;
+            color: #000;
+        }
+        textarea {
+            width: 100%;
+            min-height: 120px;
+            margin-top: 10px;
+            font-family: monospace;
+        }
+    </style>
+</head>
+<body>
+    <div class="content">
+        <h1>My Favorites</h1>
+        <p><a href="/">Index</a> | <a href="/articles">Articles</a> | <a href="/calendar">Calendar</a></p>
+        <div class="inner-content actions">
+            <button id="exportBtn" type="button">导出 JSON</button>
+            <button id="importBtn" type="button">导入 JSON</button>
+            <button id="clearBtn" type="button" class="danger">清空收藏</button>
+            <textarea id="ioArea" placeholder="导出内容会显示在这里；粘贴JSON后点击导入"></textarea>
+        </div>
+        <div class="inner-content">
+            <h2>已收藏</h2>
+            <div id="favList"></div>
+        </div>
+    </div>
+    <script>
+        const FAVORITES_KEY = 'arxivFavorites';
+
+        function loadFavorites() {
+            try {
+                return JSON.parse(localStorage.getItem(FAVORITES_KEY) || '[]');
+            } catch (e) {
+                return [];
+            }
+        }
+
+        function saveFavorites(list) {
+            localStorage.setItem(FAVORITES_KEY, JSON.stringify(list));
+        }
+
+        function renderFavorites() {
+            const list = loadFavorites();
+            const container = document.getElementById('favList');
+            if (!list.length) {
+                container.innerHTML = '<p>暂无收藏。</p>';
+                return;
+            }
+            container.innerHTML = '';
+            list.forEach(item => {
+                const div = document.createElement('div');
+                div.className = 'article-container';
+                const updated = item.updated ? new Date(item.updated).toLocaleString() : '';
+                div.innerHTML = `
+                    <div class="article-left">
+                        <h3 class="article-title">${item.title || item.entry_id}</h3>
+                        <p class="article-summary">${item.summary || ''}</p>
+                        <p><i>Updated: ${updated}</i></p>
+                    </div>
+                    <div class="article-right">
+                        <h3 class="article-title">标题: ${item.CN_title || ''}</h3>
+                        <p class="article-summary">摘要: ${item.CN_summary || ''}</p>
+                        <p><i>更新时间: ${updated}</i></p>
+                        <p><i>领域: ${item.categories || ''}</i></p>
+                        <p><i>下载: <a href="${item.entry_id}" target="_blank">${item.entry_id}</a></i></p>
+                        <button class="favorite-btn active" type="button" data-entry-id="${item.entry_id}">已收藏</button>
+                    </div>
+                `;
+                container.appendChild(div);
+            });
+
+            container.querySelectorAll('.favorite-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const entryId = btn.dataset.entryId;
+                    const listNow = loadFavorites().filter(it => it.entry_id !== entryId);
+                    saveFavorites(listNow);
+                    renderFavorites();
+                });
+            });
+        }
+
+        document.getElementById('exportBtn').addEventListener('click', () => {
+            const list = loadFavorites();
+            const payload = {
+                version: 1,
+                exported_at: new Date().toISOString(),
+                items: list,
+            };
+            const text = JSON.stringify(payload, null, 2);
+            const area = document.getElementById('ioArea');
+            area.value = text;
+            area.select();
+        });
+
+        document.getElementById('importBtn').addEventListener('click', () => {
+            const area = document.getElementById('ioArea');
+            if (!area.value.trim()) return;
+            try {
+                const parsed = JSON.parse(area.value);
+                const items = Array.isArray(parsed) ? parsed : parsed.items;
+                if (!items || !Array.isArray(items)) throw new Error('格式错误');
+                const existing = loadFavorites();
+                const merged = [...existing];
+                items.forEach(it => {
+                    if (it.entry_id && !merged.some(m => m.entry_id === it.entry_id)) {
+                        merged.push(it);
+                    }
+                });
+                saveFavorites(merged);
+                renderFavorites();
+                alert('导入成功');
+            } catch (e) {
+                alert('导入失败，请检查JSON格式');
+            }
+        });
+
+        document.getElementById('clearBtn').addEventListener('click', () => {
+            if (confirm('确定清空所有收藏？')) {
+                saveFavorites([]);
+                renderFavorites();
+            }
+        });
+
+        renderFavorites();
+    </script>
+</body>
+</html>

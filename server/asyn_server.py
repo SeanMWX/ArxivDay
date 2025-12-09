@@ -140,6 +140,16 @@ async def calendar_handler(request):
     )
 
 
+async def favorites_handler(request):
+    return aiohttp_jinja2.render_template(
+        "favorites.html",
+        request,
+        {
+            "title": "My Favorites",
+        },
+    )
+
+
 async def init_app():
     """Initializes and returns the web application backed by the data API."""
     app = web.Application()
@@ -153,6 +163,7 @@ async def init_app():
     app.router.add_get("/", index)
     app.router.add_get("/articles", article_handler)
     app.router.add_get("/calendar", calendar_handler)
+    app.router.add_get("/favorites", favorites_handler)
     app.router.add_get("/{tail:.*}", handle_404)
 
     async def close_session(app):
