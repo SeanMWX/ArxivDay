@@ -80,6 +80,12 @@
             border-color: #e0b200;
             color: #000;
         }
+        .tag-input, .note-input {
+            width: 100%;
+            box-sizing: border-box;
+            margin-top: 6px;
+            padding: 6px;
+        }
         textarea {
             width: 100%;
             min-height: 120px;
@@ -142,7 +148,9 @@
                         <p><i>更新时间: ${updated}</i></p>
                         <p><i>领域: ${item.categories || ''}</i></p>
                         <p><i>下载: <a href="${item.entry_id}" target="_blank">${item.entry_id}</a></i></p>
-                        <button class="favorite-btn active" type="button" data-entry-id="${item.entry_id}">已收藏</button>
+                        <label>标签(逗号分隔): <input class="tag-input" type="text" value="${item.tags || ''}" data-entry-id="${item.entry_id}"></label>
+                        <label>笔记:<textarea class="note-input" data-entry-id="${item.entry_id}">${item.note || ''}</textarea></label>
+                        <button class="favorite-btn active" type="button" data-entry-id="${item.entry_id}">已收藏 / 取消</button>
                     </div>
                 `;
                 container.appendChild(div);
@@ -154,6 +162,22 @@
                     const listNow = loadFavorites().filter(it => it.entry_id !== entryId);
                     saveFavorites(listNow);
                     renderFavorites();
+                });
+            });
+
+            // 保存标签/笔记
+            container.querySelectorAll('.tag-input, .note-input').forEach(input => {
+                input.addEventListener('change', () => {
+                    const entryId = input.dataset.entryId;
+                    const listNow = loadFavorites();
+                    const target = listNow.find(it => it.entry_id === entryId);
+                    if (target) {
+                        const tagEl = container.querySelector(`.tag-input[data-entry-id="${entryId}"]`);
+                        const noteEl = container.querySelector(`.note-input[data-entry-id="${entryId}"]`);
+                        target.tags = (tagEl?.value || '').trim();
+                        target.note = (noteEl?.value || '').trim();
+                        saveFavorites(listNow);
+                    }
                 });
             });
         }
