@@ -61,6 +61,16 @@
         .filters input, .filters select {
             padding: 6px 8px;
         }
+        .bulk-actions {
+            margin: 10px 0;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        .bulk-actions input[type="text"] {
+            padding: 6px 8px;
+        }
         button {
             margin-right: 8px;
             padding: 6px 10px;
@@ -116,6 +126,13 @@
                 <option value="title_asc">标题 A→Z</option>
             </select>
         </div>
+        <div class="inner-content bulk-actions">
+            <span>已选：<span id="selectedCount">0</span></span>
+            <button id="bulkArchive" type="button">归档选中</button>
+            <button id="bulkDelete" type="button" class="danger">删除选中</button>
+            <input id="bulkTagInput" type="text" placeholder="添加标签到选中（单个标签）" />
+            <button id="bulkTagBtn" type="button">应用标签</button>
+        </div>
         <div class="inner-content">
             <div id="favList"></div>
         </div>
@@ -126,6 +143,7 @@
             search: '',
             tagFilter: '',
             sort: 'updated_desc',
+            selected: new Set(),
         };
 
         function loadFavorites() {
@@ -202,6 +220,7 @@
                 const updated = item.updated ? new Date(item.updated).toLocaleString() : '';
                 div.innerHTML = `
                     <div class="article-left">
+                        <input type="checkbox" class="select-chk" data-entry-id="${item.entry_id}" ${state.selected.has(item.entry_id) ? 'checked' : ''}>
                         <h3 class="article-title">${highlight(item.title || item.entry_id, state.search)}</h3>
                         <p class="article-summary">${highlight(item.summary || '', state.search)}</p>
                         <p><i>Updated: ${updated}</i></p>
@@ -229,11 +248,14 @@
                     if (!target) return;
                     if (btn.dataset.archive === '1') {
                         target.archived = true;
+                        state.selected.delete(entryId);
                     } else {
                         listNow = listNow.filter(it => it.entry_id !== entryId);
+                        state.selected.delete(entryId);
                     }
                     saveFavorites(listNow);
                     renderFavorites();
+                    updateSelectedCount();
                 });
             });
 
@@ -249,6 +271,64 @@
                     }
                 });
             });
+
+            container.querySelectorAll('.select-chk').forEach(chk => {
+                chk.addEventListener('change', (e) => {
+                    const id = chk.dataset.entryId;
+                    if (e.target.checked) {
+                        state.selected.add(id);
+                    } else {
+                        state.selected.delete(id);
+                    }
+                    updateSelectedCount();
+                });
+            });
+
+            updateSelectedCount();
+        }
+
+        function updateSelectedCount() {
+            document.getElementById('selectedCount').innerText = state.selected.size;
+        }
+
+        function bulkArchive() {
+            if (!state.selected.size) return;
+            const list = loadFavorites();
+            list.forEach(it => {
+                if (state.selected.has(it.entry_id)) {
+                    it.archived = true;
+                }
+            });
+            state.selected.clear();
+            saveFavorites(list);
+            renderFavorites();
+            updateSelectedCount();
+        }
+
+        function bulkDelete() {
+            if (!state.selected.size) return;
+            if (!confirm('确定删除选中收藏？')) return;
+            let list = loadFavorites();
+            list = list.filter(it => !state.selected.has(it.entry_id));
+            state.selected.clear();
+            saveFavorites(list);
+            renderFavorites();
+            updateSelectedCount();
+        }
+
+        function bulkTag() {
+            const tag = document.getElementById('bulkTagInput').value.trim();
+            if (!tag || !state.selected.size) return;
+            const list = loadFavorites();
+            list.forEach(it => {
+                if (state.selected.has(it.entry_id)) {
+                    const tags = (it.tags || '').split(',').map(t => t.trim()).filter(Boolean);
+                    if (!tags.includes(tag)) tags.push(tag);
+                    it.tags = tags.join(', ');
+                }
+            });
+            saveFavorites(list);
+            renderFavorites();
         }
 
         // Filter/sort bindings
@@ -264,6 +344,10 @@
             state.sort = e.target.value;
             renderFavorites();
         });
+
+        document.getElementById('bulkArchive').addEventListener('click', bulkArchive);
+        document.getElementById('bulkDelete').addEventListener('click', bulkDelete);
+        document.getElementById('bulkTagBtn').addEventListener('click', bulkTag);
 
         renderFavorites();
     </script>
