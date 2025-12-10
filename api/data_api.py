@@ -62,6 +62,7 @@ app.state.table = config.articles_table()
 app.state.api_key = None
 SYNC_STORE = {}  # in-memory {sync_id: {"payload":..., "created_at": datetime}}
 SYNC_TTL = timedelta(minutes=15)
+SYNC_LOCK = asyncio.Lock()
 
 # Allow CORS for browser access (sync endpoints need preflight)
 app.add_middleware(
@@ -254,7 +255,7 @@ async def categories_counts(date: Optional[str] = None, auth=Depends(verify_api_
     return {"date": target_date, "items": results}
 
 
-def _cleanup_sync():
+async def _cleanup_sync():
     now = datetime.utcnow()
     expired = [k for k, v in SYNC_STORE.items() if now - v["created_at"] > SYNC_TTL]
     for k in expired:
@@ -272,20 +273,23 @@ async def sync_put(sync_id: str, payload: dict):
     required_fields = {"ciphertext", "salt", "iv"}
     if not required_fields.issubset(payload.keys()):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Missing ciphertext/salt/iv")
-    _cleanup_sync()
-    SYNC_STORE[sync_id] = {"payload": payload, "created_at": datetime.utcnow()}
+    async with SYNC_LOCK:
+        await _cleanup_sync()
+        SYNC_STORE[sync_id] = {"payload": payload, "created_at": datetime.utcnow()}
     return {"status": "ok", "expires_in_seconds": int(SYNC_TTL.total_seconds())}
 
 
 @app.get("/sync/{sync_id}")
 async def sync_get(sync_id: str):
-    _cleanup_sync()
-    item = SYNC_STORE.get(sync_id)
+    async with SYNC_LOCK:
+        await _cleanup_sync()
+        item = SYNC_STORE.get(sync_id)
     if not item:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found or expired")
     # Check ttl
     if datetime.utcnow() - item["created_at"] > SYNC_TTL:
-        SYNC_STORE.pop(sync_id, None)
+        async with SYNC_LOCK:
+            SYNC_STORE.pop(sync_id, None)
         raise HTTPException(status_code=status.HTTP_410_GONE, detail="Expired")
     return item["payload"]
 

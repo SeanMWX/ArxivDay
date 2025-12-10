@@ -68,7 +68,7 @@
         <p><a href="/">Index</a> | <a href="/articles">Articles</a> | <a href="/calendar">Calendar</a> | <a href="/favorites">Favorites</a> | <a href="/archive">Archive</a></p>
         <div class="card">
             <p>当前收藏：<span id="countActive"></span>，当前归档：<span id="countArchived"></span></p>
-            <p>最后操作时间：<span id="lastAction">暂无</span></p>
+            <p>最后更新时间：<span id="lastAction">暂无</span></p>
         </div>
         <div class="card">
             <h3>同步（加密上传/拉取）</h3>
@@ -135,10 +135,12 @@
         function renderLastAction() {
             try {
                 const meta = JSON.parse(localStorage.getItem('syncLastMeta') || '{}');
-                if (meta.time) {
-                    const t = new Date(meta.time).toLocaleString();
+                if (meta.created_at) {
+                    const created = new Date(meta.created_at).toLocaleString();
+                    const exp = meta.expires_at ? new Date(meta.expires_at).toLocaleString() : null;
                     const id = meta.id ? ` (ID: ${meta.id})` : '';
-                    document.getElementById('lastAction').innerText = `${meta.type || '操作'} @ ${t}${id}`;
+                    const expireText = exp ? `，过期: ${exp}` : '';
+                    document.getElementById('lastAction').innerText = `${meta.type || '同步'} @ ${created}${id}${expireText}`;
                 } else {
                     document.getElementById('lastAction').innerText = '暂无';
                 }
@@ -237,7 +239,9 @@
                 return;
             }
             document.getElementById('syncStatus').innerText = '上传成功，有效期 15 分钟';
-            localStorage.setItem('syncLastMeta', JSON.stringify({type: '上传', time: new Date().toISOString(), id: url}));
+            const created = payload.created_at;
+            const expires = new Date(new Date(created).getTime() + 15 * 60 * 1000).toISOString();
+            localStorage.setItem('syncLastMeta', JSON.stringify({type: '同步', created_at: created, expires_at: expires, id: url}));
             // 指向 profile 页的便捷链接，自动填充 syncId/syncCode
             const pageLink = `${window.location.origin}${window.location.pathname}?syncId=${encodeURIComponent(url)}&syncCode=${encodeURIComponent(syncCode)}`;
             renderQR(pageLink);
@@ -282,7 +286,9 @@
                 saveFavorites(Array.from(map.values()));
                 renderCounts();
                 document.getElementById('syncStatus').innerText = '导入成功';
-                localStorage.setItem('syncLastMeta', JSON.stringify({type: '拉取', time: new Date().toISOString(), id: idUrl}));
+                const created = payload.created_at;
+                const expires = new Date(new Date(created).getTime() + 15 * 60 * 1000).toISOString();
+                localStorage.setItem('syncLastMeta', JSON.stringify({type: '同步', created_at: created, expires_at: expires, id: idUrl}));
             } catch (e) {
                 document.getElementById('syncStatus').innerText = '解密失败，请检查同步码';
             }
