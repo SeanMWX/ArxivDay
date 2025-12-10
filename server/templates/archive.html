@@ -61,6 +61,15 @@
             margin-top: 6px;
             padding: 6px;
         }
+        .filters {
+            margin: 10px 0;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        .filters input, .filters select {
+            padding: 6px 8px;
+        }
         textarea {
             width: 100%;
             min-height: 120px;
@@ -72,13 +81,27 @@
 <body>
     <div class="content">
         <h1>Archived</h1>
-        <p><a href="/">Index</a> | <a href="/articles">Articles</a> | <a href="/calendar">Calendar</a> | <a href="/favorites">Favorites</a></p>
+        <p><a href="/">Index</a> | <a href="/articles">Articles</a> | <a href="/calendar">Calendar</a> | <a href="/favorites">Favorites</a> | <a href="/storage">Storage</a></p>
+        <div class="inner-content filters">
+            <input id="searchInput" type="text" placeholder="搜索标题/摘要/作者/中文" />
+            <input id="tagFilter" type="text" placeholder="按标签过滤（逗号分隔）" />
+            <select id="sortSelect">
+                <option value="updated_desc">按更新时间（新→旧）</option>
+                <option value="updated_asc">按更新时间（旧→新）</option>
+                <option value="title_asc">标题 A→Z</option>
+            </select>
+        </div>
         <div class="inner-content">
             <div id="archivedList"></div>
         </div>
     </div>
     <script>
         const FAVORITES_KEY = 'arxivFavorites';
+        const state = {
+            search: '',
+            tagFilter: '',
+            sort: 'updated_desc',
+        };
 
         function loadFavorites() {
             try {
@@ -92,8 +115,56 @@
             localStorage.setItem(FAVORITES_KEY, JSON.stringify(list));
         }
 
+        function escapeHTML(str) {
+            return (str || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+        }
+
+        function escapeRegex(str) {
+            return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        }
+
+        function highlight(text, term) {
+            if (!term) return escapeHTML(text);
+            const safe = escapeHTML(text);
+            const regex = new RegExp(`(${escapeRegex(term)})`, 'gi');
+            return safe.replace(regex, '<mark>$1</mark>');
+        }
+
+        function applyFilters(list) {
+            const s = state.search.trim().toLowerCase();
+            const tags = state.tagFilter.split(',').map(t => t.trim().toLowerCase()).filter(Boolean);
+            let filtered = list.filter(it => it.archived);
+
+            if (s) {
+                filtered = filtered.filter(it => {
+                    const fields = [it.title, it.CN_title, it.summary, it.CN_summary, it.authors].map(v => (v || '').toLowerCase());
+                    return fields.some(v => v.includes(s));
+                });
+            }
+
+            if (tags.length) {
+                filtered = filtered.filter(it => {
+                    const itemTags = (it.tags || '').split(',').map(t => t.trim().toLowerCase()).filter(Boolean);
+                    return tags.every(t => itemTags.includes(t));
+                });
+            }
+
+            filtered.sort((a, b) => {
+                if (state.sort === 'updated_desc' || state.sort === 'updated_asc') {
+                    const da = a.updated ? new Date(a.updated).getTime() : 0;
+                    const db = b.updated ? new Date(b.updated).getTime() : 0;
+                    return state.sort === 'updated_desc' ? db - da : da - db;
+                }
+                if (state.sort === 'title_asc') {
+                    return (a.title || '').localeCompare(b.title || '');
+                }
+                return 0;
+            });
+            return filtered;
+        }
+
         function renderArchived() {
-            const list = loadFavorites().filter(it => it.archived);
+            const list = applyFilters(loadFavorites());
             const container = document.getElementById('archivedList');
             if (!list.length) {
                 container.innerHTML = '<p>暂无归档内容。</p>';
@@ -106,13 +177,13 @@
                 const updated = item.updated ? new Date(item.updated).toLocaleString() : '';
                 div.innerHTML = `
                     <div class="article-left">
-                        <h3 class="article-title">${item.title || item.entry_id}</h3>
-                        <p class="article-summary">${item.summary || ''}</p>
+                        <h3 class="article-title">${highlight(item.title || item.entry_id, state.search)}</h3>
+                        <p class="article-summary">${highlight(item.summary || '', state.search)}</p>
                         <p><i>Updated: ${updated}</i></p>
                     </div>
                     <div class="article-right">
-                        <h3 class="article-title">标题: ${item.CN_title || ''}</h3>
-                        <p class="article-summary">摘要: ${item.CN_summary || ''}</p>
+                        <h3 class="article-title">标题: ${highlight(item.CN_title || '', state.search)}</h3>
+                        <p class="article-summary">摘要: ${highlight(item.CN_summary || '', state.search)}</p>
                         <p><i>更新时间: ${updated}</i></p>
                         <p><i>领域: ${item.categories || ''}</i></p>
                         <p><i>下载: <a href="${item.entry_id}" target="_blank">${item.entry_id}</a></i></p>
@@ -154,6 +225,20 @@
                 });
             });
         }
+
+        // Filter/sort bindings
+        document.getElementById('searchInput').addEventListener('input', (e) => {
+            state.search = e.target.value;
+            renderArchived();
+        });
+        document.getElementById('tagFilter').addEventListener('input', (e) => {
+            state.tagFilter = e.target.value;
+            renderArchived();
+        });
+        document.getElementById('sortSelect').addEventListener('change', (e) => {
+            state.sort = e.target.value;
+            renderArchived();
+        });
 
         renderArchived();
     </script>
