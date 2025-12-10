@@ -409,6 +409,14 @@
         document.getElementById('bulkDelete').addEventListener('click', bulkDelete);
         document.getElementById('bulkTagBtn').addEventListener('click', bulkTag);
 
+        // Sync across tabs
+        window.addEventListener('storage', (e) => {
+            if (e.key === FAVORITES_KEY) {
+                renderFavorites();
+                renderTagSuggestions();
+            }
+        });
+
         renderFavorites();
         renderTagSuggestions();
     </script>

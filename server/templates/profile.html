@@ -243,8 +243,10 @@
             const expires = new Date(new Date(created).getTime() + 15 * 60 * 1000).toISOString();
             localStorage.setItem('syncLastMeta', JSON.stringify({type: '同步', created_at: created, expires_at: expires, id: url}));
             // 指向 profile 页的便捷链接，自动填充 syncId/syncCode
-            const pageLink = `${window.location.origin}${window.location.pathname}?syncId=${encodeURIComponent(url)}&syncCode=${encodeURIComponent(syncCode)}`;
+            // 固定使用 /profile 便于多标签/扫码填充
+            const pageLink = `${window.location.origin}/profile?syncId=${encodeURIComponent(url)}&syncCode=${encodeURIComponent(syncCode)}`;
             renderQR(pageLink);
+            renderLastAction();
         }
 
         // --- Sync Fetch ---
@@ -283,12 +285,13 @@
                         map.set(it.entry_id, it);
                     }
                 });
-                saveFavorites(Array.from(map.values()));
-                renderCounts();
-                document.getElementById('syncStatus').innerText = '导入成功';
                 const created = payload.created_at;
                 const expires = new Date(new Date(created).getTime() + 15 * 60 * 1000).toISOString();
                 localStorage.setItem('syncLastMeta', JSON.stringify({type: '同步', created_at: created, expires_at: expires, id: idUrl}));
+                saveFavorites(Array.from(map.values()));
+                renderCounts();
+                renderLastAction();
+                document.getElementById('syncStatus').innerText = '导入成功';
             } catch (e) {
                 document.getElementById('syncStatus').innerText = '解密失败，请检查同步码';
             }
@@ -316,6 +319,13 @@
         });
         document.getElementById('apiKey').addEventListener('change', (e) => {
             localStorage.setItem('syncApiKey', e.target.value.trim());
+        });
+
+        // Sync across tabs (更新计数与最后更新时间)
+        window.addEventListener('storage', (e) => {
+            if (e.key === 'arxivFavorites' || e.key === 'syncLastMeta') {
+                renderCounts();
+            }
         });
 
         // Prefill from URL params/hash: ?syncId=...&syncCode=... or #syncCode=...&syncId=...
