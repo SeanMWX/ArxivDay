@@ -52,6 +52,11 @@ class Config:
             raise RuntimeError("API key not configured. Set API_KEY env or [api].key in config.ini")
         return key
 
+    def server_port(self) -> int:
+        if self.config.has_section("server"):
+            return int(self.config["server"].get("port", 8000))
+        return int(os.getenv("PORT", 8000))
+
 
 async def create_pool(loop, db_config: dict):
     return await aiomysql.create_pool(loop=loop, **db_config)
@@ -349,7 +354,7 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description="Run Arxiv Day Data API")
     parser.add_argument("--host", default="0.0.0.0")
-    parser.add_argument("--port", type=int, default=8000)
+    parser.add_argument("--port", type=int, default=config.server_port())
     args = parser.parse_args()
 
     uvicorn.run("data_api:app", host=args.host, port=args.port, reload=False)

@@ -10,3 +10,6 @@ categories=cs.AI, cs.CR, cs.LG
 
 [api]
 key=<MAKE_YOUR_OWN_KEY_HERE>
+
+[server]
+port=8000
