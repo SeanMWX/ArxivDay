@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="utf-8">
-    <title>{{ title }}</title>
+    <title>Profile</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <style>
         body, html {
@@ -21,15 +21,6 @@
             padding: 20px;
             min-height: calc(100vh - 60px);
             line-height: 1.5;
-        }
-        .inner-content {
-            max-width: 1200px;
-            width: 100%;
-            background: #fff;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            padding: 20px;
-            border-radius: 5px;
-            margin-bottom: 20px;
         }
         .card {
             background: #fff;
@@ -77,7 +68,7 @@
         <p><a href="/">Index</a> | <a href="/articles">Articles</a> | <a href="/calendar">Calendar</a> | <a href="/favorites">Favorites</a> | <a href="/archive">Archive</a></p>
         <div class="card">
             <p>当前收藏：<span id="countActive"></span>，当前归档：<span id="countArchived"></span></p>
-            <p>最后更新时间：<span id="lastAction">暂无</span></p>
+            <p>最后操作时间：<span id="lastAction">暂无</span></p>
         </div>
         <div class="card">
             <h3>同步（加密上传/拉取）</h3>
@@ -247,7 +238,7 @@
             }
             document.getElementById('syncStatus').innerText = '上传成功，有效期 15 分钟';
             localStorage.setItem('syncLastMeta', JSON.stringify({type: '上传', time: new Date().toISOString(), id: url}));
-            // 构造指向当前 storage 页的便捷链接，自动填充 syncId/syncCode
+            // 指向 profile 页的便捷链接，自动填充 syncId/syncCode
             const pageLink = `${window.location.origin}${window.location.pathname}?syncId=${encodeURIComponent(url)}&syncCode=${encodeURIComponent(syncCode)}`;
             renderQR(pageLink);
         }
@@ -328,7 +319,6 @@
             if (hash) {
                 const hashParams = new URLSearchParams(hash);
                 hashParams.forEach((v, k) => params.set(k, v));
-                // Also support pattern #sync=<code>
                 if (hash.startsWith('sync=')) {
                     const code = hash.split('sync=')[1];
                     params.set('syncCode', code);

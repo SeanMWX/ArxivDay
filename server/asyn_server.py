@@ -162,10 +162,10 @@ async def archive_handler(request):
 
 async def storage_handler(request):
     return aiohttp_jinja2.render_template(
-        "storage.html",
+        "profile.html",
         request,
         {
-            "title": "Local Storage",
+            "title": "Profile",
         },
     )
 
