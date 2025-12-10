@@ -157,6 +157,9 @@
             border-color: #e0b200;
             color: #000;
         }
+        .focused {
+            outline: 2px solid #007bff;
+        }
     </style>
 </head>
 <body>
@@ -211,6 +214,8 @@
     <script>
         const activeFilters = new Set(); // 存储激活的过滤器
         const articles = document.querySelectorAll('.article-container'); // 获取所有文章容器
+        let visibleArticles = [];
+        let focusedIndex = -1;
 
         // 示例分类数据，假设从后端获取
         const categoriesFromBackend = JSON.parse({{ categories | tojson | safe }});
@@ -256,6 +261,17 @@
 
             // 更新页面上显示文章数目的元素
             document.getElementById('articlesCount').innerText = visibleArticlesCount;
+
+            // 重建可见列表用于键盘导航
+            visibleArticles = [];
+            document.querySelectorAll('.article-container').forEach((article, idx) => {
+                if (article.style.display !== 'none') {
+                    visibleArticles.push(article);
+                }
+            });
+            if (focusedIndex >= visibleArticles.length) focusedIndex = visibleArticles.length - 1;
+            if (focusedIndex === -1 && visibleArticles.length) focusedIndex = 0;
+            applyFocus();
         }
 
         // 更新最新的更新时间
@@ -343,6 +359,47 @@
             updateArticleVisibility();
             updateLastUpdatedTime();
             initFavoriteButtons();
+            buildInitialVisible();
+        });
+
+        function buildInitialVisible() {
+            visibleArticles = Array.from(document.querySelectorAll('.article-container'));
+            if (visibleArticles.length) {
+                focusedIndex = 0;
+                applyFocus();
+            }
+        }
+
+        function applyFocus() {
+            document.querySelectorAll('.article-container.focused').forEach(el => el.classList.remove('focused'));
+            if (focusedIndex >= 0 && focusedIndex < visibleArticles.length) {
+                const el = visibleArticles[focusedIndex];
+                el.classList.add('focused');
+                el.scrollIntoView({behavior: 'smooth', block: 'center'});
+            }
+        }
+
+        function moveFocus(delta) {
+            if (!visibleArticles.length) return;
+            focusedIndex = Math.max(0, Math.min(visibleArticles.length - 1, focusedIndex + delta));
+            applyFocus();
+        }
+
+        function toggleFocusedFavorite() {
+            if (focusedIndex < 0 || focusedIndex >= visibleArticles.length) return;
+            const container = visibleArticles[focusedIndex];
+            const btn = container.querySelector('.favorite-btn');
+            if (btn) {
+                btn.click();
+            }
+        }
+
+        document.addEventListener('keydown', (e) => {
+            const tag = e.target.tagName.toLowerCase();
+            if (['input', 'textarea', 'select', 'button'].includes(tag)) return;
+            if (e.key === 'ArrowDown') { e.preventDefault(); moveFocus(1); }
+            else if (e.key === 'ArrowUp') { e.preventDefault(); moveFocus(-1); }
+            else if (e.key === ' ') { e.preventDefault(); toggleFocusedFavorite(); }
         });
 
     </script>     

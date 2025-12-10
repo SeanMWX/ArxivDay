@@ -214,14 +214,15 @@
                 return;
             }
             container.innerHTML = '';
-            list.forEach(item => {
+            list.forEach((item) => {
                 const div = document.createElement('div');
                 div.className = 'article-container';
+                const entryId = item.entry_id;
                 const updated = item.updated ? new Date(item.updated).toLocaleString() : '';
                 div.innerHTML = `
                     <div class="article-left">
-                        <input type="checkbox" class="select-chk" data-entry-id="${item.entry_id}" ${state.selected.has(item.entry_id) ? 'checked' : ''}>
-                        <h3 class="article-title">${highlight(item.title || item.entry_id, state.search)}</h3>
+                        <input type="checkbox" class="select-chk" data-entry-id="${entryId}" ${state.selected.has(entryId) ? 'checked' : ''}>
+                        <h3 class="article-title">${highlight(item.title || entryId, state.search)}</h3>
                         <p class="article-summary">${highlight(item.summary || '', state.search)}</p>
                         <p><i>Updated: ${updated}</i></p>
                     </div>
@@ -230,11 +231,11 @@
                         <p class="article-summary">摘要: ${highlight(item.CN_summary || '', state.search)}</p>
                         <p><i>更新时间: ${updated}</i></p>
                         <p><i>领域: ${item.categories || ''}</i></p>
-                        <p><i>下载: <a href="${item.entry_id}" target="_blank">${item.entry_id}</a></i></p>
-                        <label>标签(逗号分隔): <input class="tag-input" type="text" value="${item.tags || ''}" data-entry-id="${item.entry_id}"></label>
-                        <label>笔记:<textarea class="note-input" data-entry-id="${item.entry_id}">${item.note || ''}</textarea></label>
-                        <button class="favorite-btn active" type="button" data-entry-id="${item.entry_id}">取消收藏</button>
-                        <button class="favorite-btn" type="button" data-entry-id="${item.entry_id}" data-archive="1">归档</button>
+                        <p><i>下载: <a href="${entryId}" target="_blank">${entryId}</a></i></p>
+                        <label>标签(逗号分隔): <input class="tag-input" type="text" value="${item.tags || ''}" data-entry-id="${entryId}"></label>
+                        <label>笔记:<textarea class="note-input" data-entry-id="${entryId}">${item.note || ''}</textarea></label>
+                        <button class="favorite-btn active" type="button" data-entry-id="${entryId}">取消收藏</button>
+                        <button class="favorite-btn" type="button" data-entry-id="${entryId}" data-archive="1">归档</button>
                     </div>
                 `;
                 container.appendChild(div);
