@@ -8,6 +8,23 @@ Arxiv Day 是一个自动化工具，用于从arXiv网站抓取最新的学术�
 ## 2025年12月9日
 正在更新 Arxiv Day v3。
 
+### api's packages
+- aiomysql==0.2.0
+- fastapi==0.124.0
+- uvicorn==0.33.0
+
+### server's packages
+- aiohttp==3.9.3
+- aiohttp_jinja2==1.6
+
+### arxiv_auto's packages
+- openai==1.14.2
+- arxiv==2.1.0
+- mysql-connector-python==8.3.0
+- schedule==1.2.1
+- httpx==0.27.2 (for python > 3.13)
+
+
 ## 2024年4月3日更新
 进入 Arxiv Day v2时代。
 
