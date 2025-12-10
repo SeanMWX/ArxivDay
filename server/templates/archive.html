@@ -101,6 +101,26 @@
         .select-chk {
             margin-right: 8px;
         }
+        .tag-suggestions {
+            margin: 10px 0;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+            font-size: 14px;
+        }
+        .tag-chip {
+            padding: 4px 8px;
+            border: 1px solid #ccc;
+            border-radius: 12px;
+            cursor: pointer;
+            background: #f8f8f8;
+            margin-right: 6px;
+        }
+        .tag-chip:hover {
+            border-color: #007bff;
+            color: #007bff;
+        }
         .article-container {
             display: flex;
             justify-content: space-between;
@@ -137,6 +157,10 @@
             <button id="bulkDelete" type="button" class="danger">删除选中</button>
             <input id="bulkTagInput" type="text" placeholder="添加标签到选中（单个标签）" />
             <button id="bulkTagBtn" type="button">应用标签</button>
+        </div>
+        <div class="inner-content tag-suggestions">
+            <span>常用标签：</span>
+            <div id="tagSuggestions"></div>
         </div>
         <div class="inner-content">
             <div id="archivedList"></div>
@@ -336,6 +360,41 @@
             renderArchived();
         }
 
+        function getTagSuggestions(limit = 10) {
+            const counts = {};
+            loadFavorites().forEach(it => {
+                (it.tags || '').split(',').map(t => t.trim()).filter(Boolean).forEach(t => {
+                    counts[t] = (counts[t] || 0) + 1;
+                });
+            });
+            return Object.entries(counts)
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, limit)
+                .map(([tag]) => tag);
+        }
+
+        function renderTagSuggestions() {
+            const container = document.getElementById('tagSuggestions');
+            const tags = getTagSuggestions();
+            container.innerHTML = '';
+            if (!tags.length) {
+                container.textContent = '无';
+                return;
+            }
+            tags.forEach(tag => {
+                const chip = document.createElement('span');
+                chip.className = 'tag-chip';
+                chip.textContent = tag;
+                chip.addEventListener('click', () => {
+                    document.getElementById('bulkTagInput').value = tag;
+                    if (state.selected.size) {
+                        bulkTag();
+                    }
+                });
+                container.appendChild(chip);
+            });
+        }
+
         // Filter/sort bindings
         document.getElementById('searchInput').addEventListener('input', (e) => {
             state.search = e.target.value;
@@ -355,6 +414,7 @@
         document.getElementById('bulkTagBtn').addEventListener('click', bulkTag);
 
         renderArchived();
+        renderTagSuggestions();
     </script>
 </body>
 </html>
