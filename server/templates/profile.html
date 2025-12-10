@@ -1,0 +1,336 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Profile</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            background-color: #f0f0f2;
+            color: #333;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        .content {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: left;
+            padding: 20px;
+            min-height: calc(100vh - 60px);
+            line-height: 1.5;
+        }
+        .card {
+            background: #fff;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            padding: 20px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            width: 100%;
+            max-width: 1200px;
+        }
+        textarea, input[type="text"], input[type="url"] {
+            width: 100%;
+            min-height: 40px;
+            font-family: monospace;
+            box-sizing: border-box;
+            padding: 8px;
+            margin-top: 6px;
+        }
+        .row {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        .row > div {
+            flex: 1;
+        }
+        button {
+            margin-right: 8px;
+            padding: 6px 10px;
+            border: 1px solid #007bff;
+            background: #fff;
+            color: #007bff;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button.danger {
+            border-color: #d9534f;
+            color: #d9534f;
+        }
+    </style>
+</head>
+<body>
+    <div class="content">
+        <h1>Profile</h1>
+        <p><a href="/">Index</a> | <a href="/articles">Articles</a> | <a href="/calendar">Calendar</a> | <a href="/favorites">Favorites</a> | <a href="/archive">Archive</a></p>
+        <div class="card">
+            <p>当前收藏：<span id="countActive"></span>，当前归档：<span id="countArchived"></span></p>
+            <p>最后操作时间：<span id="lastAction">暂无</span></p>
+        </div>
+        <div class="card">
+            <h3>同步（加密上传/拉取）</h3>
+            <div class="row">
+                <div>
+                    <label>API Base URL:
+                        <input id="apiBase" type="url" placeholder="http://127.0.0.1:8000" value="http://127.0.0.1:8000" />
+                    </label>
+                </div>
+                <div>
+                    <label>API Key (可选):
+                        <input id="apiKey" type="text" placeholder="X-API-Key" />
+                    </label>
+                </div>
+            </div>
+            <div class="row">
+                <div>
+                    <button id="syncUploadBtn" type="button">生成同步码并上传</button>
+                </div>
+                <div>
+                    <button id="syncFetchBtn" type="button">拉取并导入</button>
+                </div>
+            </div>
+            <div class="row">
+                <div>
+                    <label>生成的 ID / 下载链接:
+                        <input id="syncId" type="text" placeholder="生成后会填充" />
+                    </label>
+                </div>
+                <div>
+                    <label>同步码 (密钥):
+                        <input id="syncCode" type="text" placeholder="生成后会填充" />
+                    </label>
+                </div>
+            </div>
+            <p id="syncStatus"></p>
+            <div id="qrWrap"></div>
+        </div>
+    </div>
+    <script>
+        const FAVORITES_KEY = 'arxivFavorites';
+
+        function loadFavorites() {
+            try {
+                return JSON.parse(localStorage.getItem(FAVORITES_KEY) || '[]');
+            } catch (e) {
+                return [];
+            }
+        }
+
+        function saveFavorites(list) {
+            localStorage.setItem(FAVORITES_KEY, JSON.stringify(list));
+        }
+
+        function renderCounts() {
+            const list = loadFavorites();
+            const active = list.filter(it => !it.archived).length;
+            const archived = list.filter(it => it.archived).length;
+            document.getElementById('countActive').innerText = active;
+            document.getElementById('countArchived').innerText = archived;
+            renderLastAction();
+        }
+
+        function renderLastAction() {
+            try {
+                const meta = JSON.parse(localStorage.getItem('syncLastMeta') || '{}');
+                if (meta.time) {
+                    const t = new Date(meta.time).toLocaleString();
+                    const id = meta.id ? ` (ID: ${meta.id})` : '';
+                    document.getElementById('lastAction').innerText = `${meta.type || '操作'} @ ${t}${id}`;
+                } else {
+                    document.getElementById('lastAction').innerText = '暂无';
+                }
+            } catch (e) {
+                document.getElementById('lastAction').innerText = '暂无';
+            }
+        }
+
+        // --- Crypto helpers (WebCrypto) ---
+        async function deriveKey(syncCode, salt) {
+            const enc = new TextEncoder();
+            const keyMaterial = await crypto.subtle.importKey(
+                "raw",
+                enc.encode(syncCode),
+                { name: "PBKDF2" },
+                false,
+                ["deriveKey"]
+            );
+            return crypto.subtle.deriveKey(
+                {
+                    name: "PBKDF2",
+                    salt,
+                    iterations: 120000,
+                    hash: "SHA-256",
+                },
+                keyMaterial,
+                { name: "AES-GCM", length: 256 },
+                true,
+                ["encrypt", "decrypt"]
+            );
+        }
+
+        function toBase64(buf) {
+            return btoa(String.fromCharCode(...new Uint8Array(buf)));
+        }
+        function fromBase64(b64) {
+            return Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+        }
+
+        async function encryptFavorites(syncCode) {
+            const data = JSON.stringify(loadFavorites());
+            const enc = new TextEncoder();
+            const salt = crypto.getRandomValues(new Uint8Array(16));
+            const iv = crypto.getRandomValues(new Uint8Array(12));
+            const key = await deriveKey(syncCode, salt);
+            const cipherBuf = await crypto.subtle.encrypt(
+                { name: "AES-GCM", iv },
+                key,
+                enc.encode(data)
+            );
+            return {
+                salt: toBase64(salt),
+                iv: toBase64(iv),
+                ciphertext: toBase64(cipherBuf),
+                created_at: new Date().toISOString(),
+            };
+        }
+
+        async function decryptFavorites(syncCode, payload) {
+            const salt = fromBase64(payload.salt);
+            const iv = fromBase64(payload.iv);
+            const cipher = fromBase64(payload.ciphertext);
+            const key = await deriveKey(syncCode, salt);
+            const plainBuf = await crypto.subtle.decrypt(
+                { name: "AES-GCM", iv },
+                key,
+                cipher
+            );
+            const text = new TextDecoder().decode(plainBuf);
+            return JSON.parse(text);
+        }
+
+        // --- Sync Upload ---
+        async function syncUpload() {
+            const apiBase = document.getElementById('apiBase').value.trim().replace(/\/$/, '');
+            const apiKey = document.getElementById('apiKey').value.trim();
+            if (!apiBase) {
+                alert('请填写 API Base URL');
+                return;
+            }
+            const syncCode = crypto.randomUUID().replace(/-/g, '');
+            document.getElementById('syncCode').value = syncCode;
+            const payload = await encryptFavorites(syncCode);
+            const id = crypto.randomUUID();
+            const url = `${apiBase}/sync/${id}`;
+            document.getElementById('syncId').value = url;
+            const headers = { 'Content-Type': 'application/json' };
+            if (apiKey) headers['X-API-Key'] = apiKey;
+            const res = await fetch(url, {
+                method: 'PUT',
+                headers,
+                body: JSON.stringify(payload),
+            });
+            if (!res.ok) {
+                document.getElementById('syncStatus').innerText = `上传失败: ${res.status}`;
+                return;
+            }
+            document.getElementById('syncStatus').innerText = '上传成功，有效期 15 分钟';
+            localStorage.setItem('syncLastMeta', JSON.stringify({type: '上传', time: new Date().toISOString(), id: url}));
+            // 指向 profile 页的便捷链接，自动填充 syncId/syncCode
+            const pageLink = `${window.location.origin}${window.location.pathname}?syncId=${encodeURIComponent(url)}&syncCode=${encodeURIComponent(syncCode)}`;
+            renderQR(pageLink);
+        }
+
+        // --- Sync Fetch ---
+        async function syncFetch() {
+            const apiBase = document.getElementById('apiBase').value.trim().replace(/\/$/, '');
+            const apiKey = document.getElementById('apiKey').value.trim();
+            let idUrl = document.getElementById('syncId').value.trim();
+            const syncCode = document.getElementById('syncCode').value.trim();
+            if (!apiBase || !idUrl || !syncCode) {
+                alert('请填写 API Base URL、ID/链接 和 同步码');
+                return;
+            }
+            if (!idUrl.startsWith('http')) {
+                idUrl = `${apiBase}/sync/${idUrl}`;
+            }
+            const headers = {};
+            if (apiKey) headers['X-API-Key'] = apiKey;
+            const res = await fetch(idUrl, { headers });
+            if (!res.ok) {
+                document.getElementById('syncStatus').innerText = `拉取失败: ${res.status}`;
+                return;
+            }
+            const payload = await res.json();
+            try {
+                const imported = await decryptFavorites(syncCode, payload);
+                // 合并去重
+                const existing = loadFavorites();
+                const map = new Map(existing.map(it => [it.entry_id, it]));
+                imported.forEach(it => {
+                    if (map.has(it.entry_id)) {
+                        const target = map.get(it.entry_id);
+                        if (!target.note && it.note) target.note = it.note;
+                        if (!target.tags && it.tags) target.tags = it.tags;
+                        if (it.archived) target.archived = true;
+                    } else {
+                        map.set(it.entry_id, it);
+                    }
+                });
+                saveFavorites(Array.from(map.values()));
+                renderCounts();
+                document.getElementById('syncStatus').innerText = '导入成功';
+                localStorage.setItem('syncLastMeta', JSON.stringify({type: '拉取', time: new Date().toISOString(), id: idUrl}));
+            } catch (e) {
+                document.getElementById('syncStatus').innerText = '解密失败，请检查同步码';
+            }
+        }
+
+        function renderQR(data) {
+            const qrWrap = document.getElementById('qrWrap');
+            const encoded = encodeURIComponent(data);
+            qrWrap.innerHTML = `<p>二维码：</p><img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encoded}" alt="QR">`;
+        }
+
+        document.getElementById('syncUploadBtn').addEventListener('click', syncUpload);
+        document.getElementById('syncFetchBtn').addEventListener('click', syncFetch);
+
+        // restore saved base/key if present
+        (function restorePrefs() {
+            const savedBase = localStorage.getItem('syncApiBase');
+            const savedKey = localStorage.getItem('syncApiKey');
+            if (savedBase) document.getElementById('apiBase').value = savedBase;
+            if (savedKey) document.getElementById('apiKey').value = savedKey;
+        })();
+
+        document.getElementById('apiBase').addEventListener('change', (e) => {
+            localStorage.setItem('syncApiBase', e.target.value.trim());
+        });
+        document.getElementById('apiKey').addEventListener('change', (e) => {
+            localStorage.setItem('syncApiKey', e.target.value.trim());
+        });
+
+        // Prefill from URL params/hash: ?syncId=...&syncCode=... or #syncCode=...&syncId=...
+        (function prefillFromURL() {
+            const params = new URLSearchParams(window.location.search);
+            const hash = window.location.hash.replace('#', '');
+            if (hash) {
+                const hashParams = new URLSearchParams(hash);
+                hashParams.forEach((v, k) => params.set(k, v));
+                if (hash.startsWith('sync=')) {
+                    const code = hash.split('sync=')[1];
+                    params.set('syncCode', code);
+                }
+            }
+            const syncId = params.get('syncId');
+            const syncCode = params.get('syncCode') || params.get('sync');
+            if (syncId) document.getElementById('syncId').value = syncId;
+            if (syncCode) document.getElementById('syncCode').value = syncCode;
+        })();
+
+        renderCounts();
+    </script>
+</body>
+</html>

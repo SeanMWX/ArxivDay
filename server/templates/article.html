@@ -141,6 +141,27 @@
             color: white;
             border-color: #0056b3; /* 激活或悬停时变更边框颜色 */
         }
+
+        .favorite-btn {
+            margin-top: 8px;
+            padding: 6px 10px;
+            border: 1px solid #007bff;
+            background: #fff;
+            color: #007bff;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all .2s;
+        }
+        .favorite-btn.active {
+            background: #ffd700;
+            border-color: #e0b200;
+            color: #000;
+        }
+        .focused {
+            outline: 3px solid #007bff;
+            outline-offset: 6px; /* 外扩一些，避免贴着内容 */
+            border-radius: 8px;
+        }
     </style>
 </head>
 <body>
@@ -157,12 +178,21 @@
         <p>Last Updated: <span id="lastUpdated">N/A</span> (+00:00)</p>
         <div class="filter-container" id="filters">
             <!-- JavaScript将在这里动态添加其他选项 -->
-    </div>        
+        </div>
+        <p><a href="/">Index</a> | <a href="/calendar">Calendar</a> | <a href="/favorites">Favorites</a> | <a href="/archive">Archive</a> | <a href="/profile">Profile</a></p>
     </div>
         <div class="content">
             <div class="inner-content">
                 {% for article in articles %}
-                <div class="article-container" data-category="{{ article.categories }}" data-updated="{{ article.updated }}">
+                <div class="article-container"
+                     data-entry-id="{{ article.entry_id }}"
+                     data-title="{{ article.title }}"
+                     data-cn-title="{{ article.CN_title }}"
+                     data-authors="{{ article.authors }}"
+                     data-categories="{{ article.categories }}"
+                     data-updated="{{ article.updated }}"
+                     data-summary="{{ article.summary }}"
+                     data-cn-summary="{{ article.CN_summary }}">
                         <div class="article-left">
                             <h3 class="article-title">{{ article.title }}</h3>
                             <p class="article-summary">{{ article.summary }}</p>
@@ -174,6 +204,7 @@
                             <p><i>更新时间: {{ article.updated.strftime('%Y-%m-%d %H:%M:%S') }}</i></p>
                             <p><i>领域: {{ article.categories }}</i></p>
                             <p><i>下载: <a href="{{ article.entry_id }}" target="_blank">{{ article.entry_id }}</a></i></p>
+                            <button class="favorite-btn" type="button">收藏</button>
                         </div>
                     </div>
                 {% endfor %}
@@ -185,6 +216,8 @@
     <script>
         const activeFilters = new Set(); // 存储激活的过滤器
         const articles = document.querySelectorAll('.article-container'); // 获取所有文章容器
+        let visibleArticles = [];
+        let focusedIndex = -1;
 
         // 示例分类数据，假设从后端获取
         const categoriesFromBackend = JSON.parse({{ categories | tojson | safe }});
@@ -221,7 +254,7 @@
         function updateArticleVisibility() {
             let visibleArticlesCount = 0; // 初始化可见文章数量为0
             articles.forEach(article => {
-                const articleCategories = article.dataset.category.split(','); // 确保这里使用的是正确的属性名
+                const articleCategories = (article.dataset.categories || '').split(','); // 读取 data-categories
                 // 当没有过滤器激活时（即activeFilters.size为0），隐藏所有文章
                 const isVisible = activeFilters.size > 0 && articleCategories.some(cat => activeFilters.has(cat));
                 article.style.display = isVisible ? '' : 'none'; // 根据isVisible决定是否显示文章
@@ -230,6 +263,17 @@
 
             // 更新页面上显示文章数目的元素
             document.getElementById('articlesCount').innerText = visibleArticlesCount;
+
+            // 重建可见列表用于键盘导航
+            visibleArticles = [];
+            document.querySelectorAll('.article-container').forEach((article, idx) => {
+                if (article.style.display !== 'none') {
+                    visibleArticles.push(article);
+                }
+            });
+            if (focusedIndex >= visibleArticles.length) focusedIndex = visibleArticles.length - 1;
+            if (focusedIndex === -1 && visibleArticles.length) focusedIndex = 0;
+            applyFocus();
         }
 
         // 更新最新的更新时间
@@ -247,16 +291,117 @@
             document.getElementById('lastUpdated').innerText = latestTime !== 'N/A' ? new Date(latestTime).toLocaleString() : 'N/A';
         }
 
+        // ---- Favorites (localStorage) ----
+        const FAVORITES_KEY = 'arxivFavorites';
+
+        function loadFavorites() {
+            try {
+                return JSON.parse(localStorage.getItem(FAVORITES_KEY) || '[]');
+            } catch (e) {
+                return [];
+            }
+        }
+
+        function saveFavorites(list) {
+            localStorage.setItem(FAVORITES_KEY, JSON.stringify(list));
+        }
+
+        function isFavorite(entryId) {
+            return loadFavorites().some(item => item.entry_id === entryId);
+        }
+
+        function toggleFavorite(button, container) {
+            const entryId = container.dataset.entryId;
+            let favorites = loadFavorites();
+            const exists = favorites.find(item => item.entry_id === entryId);
+
+            if (exists) {
+                favorites = favorites.filter(item => item.entry_id !== entryId);
+                button.classList.remove('active');
+                button.textContent = '收藏';
+            } else {
+                favorites.push({
+                    entry_id: entryId,
+                    title: container.dataset.title,
+                    CN_title: container.dataset.cnTitle,
+                    authors: container.dataset.authors,
+                    categories: container.dataset.categories,
+                    updated: container.dataset.updated,
+                    summary: container.dataset.summary,
+                    CN_summary: container.dataset.cnSummary,
+                    tags: '',
+                    note: '',
+                    archived: false,
+                });
+                button.classList.add('active');
+                button.textContent = '已收藏';
+            }
+            saveFavorites(favorites);
+        }
+
+        function initFavoriteButtons() {
+            document.querySelectorAll('.article-container').forEach(container => {
+                const btn = container.querySelector('.favorite-btn');
+                const entryId = container.dataset.entryId;
+                if (isFavorite(entryId)) {
+                    btn.classList.add('active');
+                    btn.textContent = '已收藏';
+                }
+                btn.addEventListener('click', () => toggleFavorite(btn, container));
+            });
+        }
+
         document.addEventListener('DOMContentLoaded', () => {
-            // 初始化时，激活所有过滤条件
+            // 初始化过滤器
             document.querySelectorAll('.filter-option').forEach(option => {
                 option.classList.add('active');
                 activeFilters.add(option.dataset.category);
             });
 
-            // 默认显示所有文章并更新最新更新时间
             updateArticleVisibility();
             updateLastUpdatedTime();
+            initFavoriteButtons();
+            buildInitialVisible();
+        });
+
+        function buildInitialVisible() {
+            visibleArticles = Array.from(document.querySelectorAll('.article-container'));
+            if (visibleArticles.length) {
+                focusedIndex = 0;
+                applyFocus();
+            }
+        }
+
+        function applyFocus() {
+            document.querySelectorAll('.article-container.focused').forEach(el => el.classList.remove('focused'));
+            if (focusedIndex >= 0 && focusedIndex < visibleArticles.length) {
+                const el = visibleArticles[focusedIndex];
+                el.classList.add('focused');
+                el.scrollIntoView({behavior: 'smooth', block: 'center'});
+            }
+        }
+
+        function moveFocus(delta) {
+            if (!visibleArticles.length) return;
+            focusedIndex = Math.max(0, Math.min(visibleArticles.length - 1, focusedIndex + delta));
+            applyFocus();
+        }
+
+        function toggleFocusedFavorite() {
+            if (focusedIndex < 0 || focusedIndex >= visibleArticles.length) return;
+            const container = visibleArticles[focusedIndex];
+            const btn = container.querySelector('.favorite-btn');
+            if (btn) {
+                btn.click();
+            }
+        }
+
+        document.addEventListener('keydown', (e) => {
+            const tag = e.target.tagName.toLowerCase();
+            if (['input', 'textarea', 'select', 'button'].includes(tag)) return;
+            if (e.key === 'ArrowDown') { e.preventDefault(); moveFocus(1); }
+            else if (e.key === 'ArrowUp') { e.preventDefault(); moveFocus(-1); }
+            else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') { e.preventDefault(); toggleFocusedFavorite(); }
         });
 
     </script>     
