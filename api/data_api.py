@@ -1,6 +1,8 @@
 import os
 import configparser
 import asyncio
+import json
+import sqlite3
 from datetime import datetime, timedelta
 from typing import Optional
 
@@ -60,9 +62,14 @@ app = FastAPI(title="Arxiv Day Data API", version="1.0.0")
 app.state.pool = None
 app.state.table = config.articles_table()
 app.state.api_key = None
-SYNC_STORE = {}  # in-memory {sync_id: {"payload":..., "created_at": datetime}}
 SYNC_TTL = timedelta(minutes=15)
 SYNC_LOCK = asyncio.Lock()
+SYNC_DB_PATH = os.getenv("SYNC_DB_PATH", "sync.db")
+
+
+async def run_in_thread(fn, *args):
+    loop = asyncio.get_running_loop()
+    return await loop.run_in_executor(None, lambda: fn(*args))
 
 # Allow CORS for browser access (sync endpoints need preflight)
 app.add_middleware(
@@ -79,6 +86,7 @@ async def startup_event():
     loop = asyncio.get_running_loop()
     app.state.pool = await create_pool(loop, config.db_config())
     app.state.api_key = config.api_key()
+    await run_in_thread(init_sync_db)
 
 
 @app.on_event("shutdown")
@@ -255,43 +263,84 @@ async def categories_counts(date: Optional[str] = None, auth=Depends(verify_api_
     return {"date": target_date, "items": results}
 
 
-async def _cleanup_sync():
-    now = datetime.utcnow()
-    expired = [k for k, v in SYNC_STORE.items() if now - v["created_at"] > SYNC_TTL]
-    for k in expired:
-        SYNC_STORE.pop(k, None)
+def init_sync_db():
+    conn = sqlite3.connect(SYNC_DB_PATH)
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS sync_blobs (
+            id TEXT PRIMARY KEY,
+            payload TEXT NOT NULL,
+            created_at REAL NOT NULL
+        )
+        """
+    )
+    conn.commit()
+    conn.close()
+
+
+def sync_put_db(sync_id: str, payload: dict):
+    now_ts = datetime.utcnow().timestamp()
+    conn = sqlite3.connect(SYNC_DB_PATH)
+    conn.execute(
+        "DELETE FROM sync_blobs WHERE created_at < ?",
+        (now_ts - SYNC_TTL.total_seconds(),),
+    )
+    conn.execute(
+        "INSERT OR REPLACE INTO sync_blobs (id, payload, created_at) VALUES (?, ?, ?)",
+        (sync_id, json.dumps(payload), now_ts),
+    )
+    conn.commit()
+    conn.close()
+
+
+def sync_get_db(sync_id: str):
+    now_ts = datetime.utcnow().timestamp()
+    conn = sqlite3.connect(SYNC_DB_PATH)
+    conn.execute(
+        "DELETE FROM sync_blobs WHERE created_at < ?",
+        (now_ts - SYNC_TTL.total_seconds(),),
+    )
+    cur = conn.execute(
+        "SELECT payload, created_at FROM sync_blobs WHERE id = ?", (sync_id,)
+    )
+    row = cur.fetchone()
+    conn.close()
+    if not row:
+        return None
+    payload, created_at = row
+    if now_ts - created_at > SYNC_TTL.total_seconds():
+        # expired, treat as missing
+        return None
+    data = json.loads(payload)
+    data.setdefault("created_at", datetime.utcfromtimestamp(created_at).isoformat())
+    return data
 
 
 @app.put("/sync/{sync_id}")
 async def sync_put(sync_id: str, payload: dict):
     # Basic size guard: reject >2MB payload
-    import json
-
     size_est = len(json.dumps(payload))
     if size_est > 2_000_000:
         raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="Payload too large")
     required_fields = {"ciphertext", "salt", "iv"}
     if not required_fields.issubset(payload.keys()):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Missing ciphertext/salt/iv")
-    async with SYNC_LOCK:
-        await _cleanup_sync()
-        SYNC_STORE[sync_id] = {"payload": payload, "created_at": datetime.utcnow()}
+    try:
+        await run_in_thread(sync_put_db, sync_id, payload)
+    except Exception as exc:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc))
     return {"status": "ok", "expires_in_seconds": int(SYNC_TTL.total_seconds())}
 
 
 @app.get("/sync/{sync_id}")
 async def sync_get(sync_id: str):
-    async with SYNC_LOCK:
-        await _cleanup_sync()
-        item = SYNC_STORE.get(sync_id)
-    if not item:
+    try:
+        result = await run_in_thread(sync_get_db, sync_id)
+    except Exception as exc:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc))
+    if result is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found or expired")
-    # Check ttl
-    if datetime.utcnow() - item["created_at"] > SYNC_TTL:
-        async with SYNC_LOCK:
-            SYNC_STORE.pop(sync_id, None)
-        raise HTTPException(status_code=status.HTTP_410_GONE, detail="Expired")
-    return item["payload"]
+    return result
 
 
 if __name__ == "__main__":

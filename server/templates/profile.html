@@ -272,23 +272,11 @@
             const payload = await res.json();
             try {
                 const imported = await decryptFavorites(syncCode, payload);
-                // 合并去重
-                const existing = loadFavorites();
-                const map = new Map(existing.map(it => [it.entry_id, it]));
-                imported.forEach(it => {
-                    if (map.has(it.entry_id)) {
-                        const target = map.get(it.entry_id);
-                        if (!target.note && it.note) target.note = it.note;
-                        if (!target.tags && it.tags) target.tags = it.tags;
-                        if (it.archived) target.archived = true;
-                    } else {
-                        map.set(it.entry_id, it);
-                    }
-                });
+                // 直接覆盖本地，保证数量与远端一致
+                saveFavorites(imported);
                 const created = payload.created_at;
                 const expires = new Date(new Date(created).getTime() + 15 * 60 * 1000).toISOString();
                 localStorage.setItem('syncLastMeta', JSON.stringify({type: '同步', created_at: created, expires_at: expires, id: idUrl}));
-                saveFavorites(Array.from(map.values()));
                 renderCounts();
                 renderLastAction();
                 document.getElementById('syncStatus').innerText = '导入成功';
