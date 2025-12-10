@@ -31,11 +31,30 @@
             border-radius: 5px;
             margin-bottom: 20px;
         }
-        textarea {
+        .card {
+            background: #fff;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            padding: 20px;
+            border-radius: 5px;
+            margin-bottom: 20px;
             width: 100%;
-            min-height: 200px;
+            max-width: 1200px;
+        }
+        textarea, input[type="text"], input[type="url"] {
+            width: 100%;
+            min-height: 40px;
             font-family: monospace;
             box-sizing: border-box;
+            padding: 8px;
+            margin-top: 6px;
+        }
+        .row {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        .row > div {
+            flex: 1;
         }
         button {
             margin-right: 8px;
@@ -56,12 +75,45 @@
     <div class="content">
         <h1>Local Storage Dump</h1>
         <p><a href="/">Index</a> | <a href="/articles">Articles</a> | <a href="/calendar">Calendar</a> | <a href="/favorites">Favorites</a> | <a href="/archive">Archive</a></p>
-        <div class="inner-content">
-            <p>当前条目：<span id="count"></span> （包含已归档与未归档）</p>
-            <button id="exportBtn" type="button">导出 JSON</button>
-            <button id="importBtn" type="button">导入 JSON</button>
-            <button id="clearBtn" type="button" class="danger">清空</button>
-            <textarea id="ioArea" placeholder="导出内容会显示在这里；粘贴JSON后点击导入"></textarea>
+        <div class="card">
+            <p>当前收藏：<span id="countActive"></span>，当前归档：<span id="countArchived"></span></p>
+        </div>
+        <div class="card">
+            <h3>同步（加密上传/拉取）</h3>
+            <div class="row">
+                <div>
+                    <label>API Base URL:
+                        <input id="apiBase" type="url" placeholder="http://127.0.0.1:8000" value="http://127.0.0.1:8000" />
+                    </label>
+                </div>
+                <div>
+                    <label>API Key (可选):
+                        <input id="apiKey" type="text" placeholder="X-API-Key" />
+                    </label>
+                </div>
+            </div>
+            <div class="row">
+                <div>
+                    <button id="syncUploadBtn" type="button">生成同步码并上传</button>
+                </div>
+                <div>
+                    <button id="syncFetchBtn" type="button">拉取并导入</button>
+                </div>
+            </div>
+            <div class="row">
+                <div>
+                    <label>生成的 ID / 下载链接:
+                        <input id="syncId" type="text" placeholder="生成后会填充" />
+                    </label>
+                </div>
+                <div>
+                    <label>同步码 (密钥):
+                        <input id="syncCode" type="text" placeholder="生成后会填充" />
+                    </label>
+                </div>
+            </div>
+            <p id="syncStatus"></p>
+            <div id="qrWrap"></div>
         </div>
     </div>
     <script>
@@ -79,44 +131,177 @@
             localStorage.setItem(FAVORITES_KEY, JSON.stringify(list));
         }
 
-        function renderDump() {
+        function renderCounts() {
             const list = loadFavorites();
-            document.getElementById('count').innerText = list.length;
-            document.getElementById('ioArea').value = JSON.stringify({
-                version: 1,
-                exported_at: new Date().toISOString(),
-                items: list,
-            }, null, 2);
+            const active = list.filter(it => !it.archived).length;
+            const archived = list.filter(it => it.archived).length;
+            document.getElementById('countActive').innerText = active;
+            document.getElementById('countArchived').innerText = archived;
         }
 
-        document.getElementById('exportBtn').addEventListener('click', () => {
-            renderDump();
-            document.getElementById('ioArea').select();
-        });
+        // --- Crypto helpers (WebCrypto) ---
+        async function deriveKey(syncCode, salt) {
+            const enc = new TextEncoder();
+            const keyMaterial = await crypto.subtle.importKey(
+                "raw",
+                enc.encode(syncCode),
+                { name: "PBKDF2" },
+                false,
+                ["deriveKey"]
+            );
+            return crypto.subtle.deriveKey(
+                {
+                    name: "PBKDF2",
+                    salt,
+                    iterations: 120000,
+                    hash: "SHA-256",
+                },
+                keyMaterial,
+                { name: "AES-GCM", length: 256 },
+                true,
+                ["encrypt", "decrypt"]
+            );
+        }
 
-        document.getElementById('importBtn').addEventListener('click', () => {
-            const area = document.getElementById('ioArea');
-            if (!area.value.trim()) return;
+        function toBase64(buf) {
+            return btoa(String.fromCharCode(...new Uint8Array(buf)));
+        }
+        function fromBase64(b64) {
+            return Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+        }
+
+        async function encryptFavorites(syncCode) {
+            const data = JSON.stringify(loadFavorites());
+            const enc = new TextEncoder();
+            const salt = crypto.getRandomValues(new Uint8Array(16));
+            const iv = crypto.getRandomValues(new Uint8Array(12));
+            const key = await deriveKey(syncCode, salt);
+            const cipherBuf = await crypto.subtle.encrypt(
+                { name: "AES-GCM", iv },
+                key,
+                enc.encode(data)
+            );
+            return {
+                salt: toBase64(salt),
+                iv: toBase64(iv),
+                ciphertext: toBase64(cipherBuf),
+                created_at: new Date().toISOString(),
+            };
+        }
+
+        async function decryptFavorites(syncCode, payload) {
+            const salt = fromBase64(payload.salt);
+            const iv = fromBase64(payload.iv);
+            const cipher = fromBase64(payload.ciphertext);
+            const key = await deriveKey(syncCode, salt);
+            const plainBuf = await crypto.subtle.decrypt(
+                { name: "AES-GCM", iv },
+                key,
+                cipher
+            );
+            const text = new TextDecoder().decode(plainBuf);
+            return JSON.parse(text);
+        }
+
+        // --- Sync Upload ---
+        async function syncUpload() {
+            const apiBase = document.getElementById('apiBase').value.trim().replace(/\/$/, '');
+            const apiKey = document.getElementById('apiKey').value.trim();
+            if (!apiBase) {
+                alert('请填写 API Base URL');
+                return;
+            }
+            const syncCode = crypto.randomUUID().replace(/-/g, '');
+            document.getElementById('syncCode').value = syncCode;
+            const payload = await encryptFavorites(syncCode);
+            const id = crypto.randomUUID();
+            const url = `${apiBase}/sync/${id}`;
+            document.getElementById('syncId').value = url;
+            const headers = { 'Content-Type': 'application/json' };
+            if (apiKey) headers['X-API-Key'] = apiKey;
+            const res = await fetch(url, {
+                method: 'PUT',
+                headers,
+                body: JSON.stringify(payload),
+            });
+            if (!res.ok) {
+                document.getElementById('syncStatus').innerText = `上传失败: ${res.status}`;
+                return;
+            }
+            document.getElementById('syncStatus').innerText = '上传成功，有效期 15 分钟';
+            renderQR(`${url}#sync=${syncCode}`);
+        }
+
+        // --- Sync Fetch ---
+        async function syncFetch() {
+            const apiBase = document.getElementById('apiBase').value.trim().replace(/\/$/, '');
+            const apiKey = document.getElementById('apiKey').value.trim();
+            let idUrl = document.getElementById('syncId').value.trim();
+            const syncCode = document.getElementById('syncCode').value.trim();
+            if (!apiBase || !idUrl || !syncCode) {
+                alert('请填写 API Base URL、ID/链接 和 同步码');
+                return;
+            }
+            if (!idUrl.startsWith('http')) {
+                idUrl = `${apiBase}/sync/${idUrl}`;
+            }
+            const headers = {};
+            if (apiKey) headers['X-API-Key'] = apiKey;
+            const res = await fetch(idUrl, { headers });
+            if (!res.ok) {
+                document.getElementById('syncStatus').innerText = `拉取失败: ${res.status}`;
+                return;
+            }
+            const payload = await res.json();
             try {
-                const parsed = JSON.parse(area.value);
-                const items = Array.isArray(parsed) ? parsed : parsed.items;
-                if (!items || !Array.isArray(items)) throw new Error('格式错误');
-                saveFavorites(items);
-                alert('导入成功');
-                renderDump();
+                const imported = await decryptFavorites(syncCode, payload);
+                // 合并去重
+                const existing = loadFavorites();
+                const map = new Map(existing.map(it => [it.entry_id, it]));
+                imported.forEach(it => {
+                    if (map.has(it.entry_id)) {
+                        const target = map.get(it.entry_id);
+                        if (!target.note && it.note) target.note = it.note;
+                        if (!target.tags && it.tags) target.tags = it.tags;
+                        if (it.archived) target.archived = true;
+                    } else {
+                        map.set(it.entry_id, it);
+                    }
+                });
+                saveFavorites(Array.from(map.values()));
+                renderCounts();
+                document.getElementById('syncStatus').innerText = '导入成功';
             } catch (e) {
-                alert('导入失败，请检查JSON格式');
+                document.getElementById('syncStatus').innerText = '解密失败，请检查同步码';
             }
+        }
+
+        function renderQR(data) {
+            const qrWrap = document.getElementById('qrWrap');
+            const encoded = encodeURIComponent(data);
+            // 使用公共二维码服务生成图像（仅作快捷方式）
+            qrWrap.innerHTML = `<p>二维码：</p><img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encoded}" alt="QR">`;
+        }
+
+        document.getElementById('syncUploadBtn').addEventListener('click', syncUpload);
+        document.getElementById('syncFetchBtn').addEventListener('click', syncFetch);
+
+        // restore saved base/key if present
+        (function restorePrefs() {
+            const savedBase = localStorage.getItem('syncApiBase');
+            const savedKey = localStorage.getItem('syncApiKey');
+            if (savedBase) document.getElementById('apiBase').value = savedBase;
+            if (savedKey) document.getElementById('apiKey').value = savedKey;
+        })();
+
+        document.getElementById('apiBase').addEventListener('change', (e) => {
+            localStorage.setItem('syncApiBase', e.target.value.trim());
+        });
+        document.getElementById('apiKey').addEventListener('change', (e) => {
+            localStorage.setItem('syncApiKey', e.target.value.trim());
         });
 
-        document.getElementById('clearBtn').addEventListener('click', () => {
-            if (confirm('确定清空所有本地数据？')) {
-                saveFavorites([]);
-                renderDump();
-            }
-        });
-
-        renderDump();
+        renderCounts();
     </script>
 </body>
 </html>

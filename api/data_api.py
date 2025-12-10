@@ -1,10 +1,12 @@
 import os
 import configparser
 import asyncio
+from datetime import datetime, timedelta
 from typing import Optional
 
 import aiomysql
 from fastapi import FastAPI, Query, Depends, Header, HTTPException, Request, status
+from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 
 
@@ -58,6 +60,17 @@ app = FastAPI(title="Arxiv Day Data API", version="1.0.0")
 app.state.pool = None
 app.state.table = config.articles_table()
 app.state.api_key = None
+SYNC_STORE = {}  # in-memory {sync_id: {"payload":..., "created_at": datetime}}
+SYNC_TTL = timedelta(minutes=15)
+
+# Allow CORS for browser access (sync endpoints need preflight)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 @app.on_event("startup")
@@ -118,6 +131,8 @@ async def root(auth=Depends(verify_api_key)):
             "calendar": "/calendar",
             "categories": "/categories",
             "categories_counts": "/categories/counts?date=YYYY-MM-DD",
+            "sync_put": "/sync/{id}",
+            "sync_get": "/sync/{id}",
         },
         "auth": "Pass X-API-Key header with the configured key.",
         "note": "All endpoints are read-only. Date defaults to latest when omitted. page_size has no enforced upper limit—use responsibly.",
@@ -237,6 +252,42 @@ async def categories_counts(date: Optional[str] = None, auth=Depends(verify_api_
         cnt = await count_by_category(pool, table, cat, target_date)
         results.append({"category": cat, "count": cnt})
     return {"date": target_date, "items": results}
+
+
+def _cleanup_sync():
+    now = datetime.utcnow()
+    expired = [k for k, v in SYNC_STORE.items() if now - v["created_at"] > SYNC_TTL]
+    for k in expired:
+        SYNC_STORE.pop(k, None)
+
+
+@app.put("/sync/{sync_id}")
+async def sync_put(sync_id: str, payload: dict):
+    # Basic size guard: reject >2MB payload
+    import json
+
+    size_est = len(json.dumps(payload))
+    if size_est > 2_000_000:
+        raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="Payload too large")
+    required_fields = {"ciphertext", "salt", "iv"}
+    if not required_fields.issubset(payload.keys()):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Missing ciphertext/salt/iv")
+    _cleanup_sync()
+    SYNC_STORE[sync_id] = {"payload": payload, "created_at": datetime.utcnow()}
+    return {"status": "ok", "expires_in_seconds": int(SYNC_TTL.total_seconds())}
+
+
+@app.get("/sync/{sync_id}")
+async def sync_get(sync_id: str):
+    _cleanup_sync()
+    item = SYNC_STORE.get(sync_id)
+    if not item:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found or expired")
+    # Check ttl
+    if datetime.utcnow() - item["created_at"] > SYNC_TTL:
+        SYNC_STORE.pop(sync_id, None)
+        raise HTTPException(status_code=status.HTTP_410_GONE, detail="Expired")
+    return item["payload"]
 
 
 if __name__ == "__main__":
