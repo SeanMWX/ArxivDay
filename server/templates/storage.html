@@ -229,7 +229,9 @@
                 return;
             }
             document.getElementById('syncStatus').innerText = '上传成功，有效期 15 分钟';
-            renderQR(`${url}#sync=${syncCode}`);
+            // 构造指向当前 storage 页的便捷链接，自动填充 syncId/syncCode
+            const pageLink = `${window.location.origin}${window.location.pathname}?syncId=${encodeURIComponent(url)}&syncCode=${encodeURIComponent(syncCode)}`;
+            renderQR(pageLink);
         }
 
         // --- Sync Fetch ---
@@ -279,7 +281,6 @@
         function renderQR(data) {
             const qrWrap = document.getElementById('qrWrap');
             const encoded = encodeURIComponent(data);
-            // 使用公共二维码服务生成图像（仅作快捷方式）
             qrWrap.innerHTML = `<p>二维码：</p><img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encoded}" alt="QR">`;
         }
 
@@ -300,6 +301,25 @@
         document.getElementById('apiKey').addEventListener('change', (e) => {
             localStorage.setItem('syncApiKey', e.target.value.trim());
         });
+
+        // Prefill from URL params/hash: ?syncId=...&syncCode=... or #syncCode=...&syncId=...
+        (function prefillFromURL() {
+            const params = new URLSearchParams(window.location.search);
+            const hash = window.location.hash.replace('#', '');
+            if (hash) {
+                const hashParams = new URLSearchParams(hash);
+                hashParams.forEach((v, k) => params.set(k, v));
+                // Also support pattern #sync=<code>
+                if (hash.startsWith('sync=')) {
+                    const code = hash.split('sync=')[1];
+                    params.set('syncCode', code);
+                }
+            }
+            const syncId = params.get('syncId');
+            const syncCode = params.get('syncCode') || params.get('sync');
+            if (syncId) document.getElementById('syncId').value = syncId;
+            if (syncCode) document.getElementById('syncCode').value = syncCode;
+        })();
 
         renderCounts();
     </script>
