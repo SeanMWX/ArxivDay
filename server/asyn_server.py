@@ -75,15 +75,22 @@ async def index(request):
     categories_resp = await api_get(app, "/categories")
     categories = categories_resp.get("categories", [])
 
-    counts_resp = await api_get(app, "/categories/counts", params={"date": latest_update} if latest_update else None)
+    counts_resp = await api_get(app, "/categories/counts", params={"all_time": "true"})
     categories_info = {item["category"]: item.get("count", 0) for item in counts_resp.get("items", [])}
     for cat in categories:
         categories_info.setdefault(cat, 0)
+    total_collection = sum(categories_info.values())
 
     return aiohttp_jinja2.render_template(
         "index.html",
         request,
-        {"title": "Arxiv Day", "latest_update": latest_update, "count": count, "categories_info": categories_info},
+        {
+            "title": "Arxiv Day",
+            "latest_update": latest_update,
+            "count": count,
+            "categories_info": categories_info,
+            "total_collection": total_collection,
+        },
     )
 
 

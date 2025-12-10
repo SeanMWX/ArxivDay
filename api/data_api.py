@@ -133,6 +133,18 @@ async def count_by_category(pool, table: str, category: str, date: str) -> int:
             return row["count"] if row else 0
 
 
+async def count_all_by_category(pool, table: str, category: str) -> int:
+    """Count all rows for a given category (no date filter)."""
+    async with pool.acquire() as conn:
+        async with conn.cursor(aiomysql.DictCursor) as cur:
+            await cur.execute(
+                f"SELECT COUNT(*) AS count FROM {table} WHERE categories LIKE %s",
+                (f"%{category}%",),
+            )
+            row = await cur.fetchone()
+            return row["count"] if row else 0
+
+
 @app.get("/")
 async def root(auth=Depends(verify_api_key)):
     return {
@@ -144,7 +156,7 @@ async def root(auth=Depends(verify_api_key)):
             "articles": "/articles?date=YYYY-MM-DD&category=cs.AI&page=1&page_size=1000",
             "calendar": "/calendar",
             "categories": "/categories",
-            "categories_counts": "/categories/counts?date=YYYY-MM-DD",
+            "categories_counts": "/categories/counts?date=YYYY-MM-DD&all_time=false",
             "sync_put": "/sync/{id}",
             "sync_get": "/sync/{id}",
         },
@@ -253,19 +265,29 @@ async def categories(auth=Depends(verify_api_key)):
 
 
 @app.get("/categories/counts")
-async def categories_counts(date: Optional[str] = None, auth=Depends(verify_api_key)):
+async def categories_counts(
+    date: Optional[str] = None,
+    all_time: bool = False,
+    auth=Depends(verify_api_key),
+):
     pool = app.state.pool
     table = app.state.table
+    categories = config.categories()
+    results = []
+    if all_time:
+        for cat in categories:
+            cnt = await count_all_by_category(pool, table, cat)
+            results.append({"category": cat, "count": cnt})
+        return {"date": None, "items": results, "scope": "all_time"}
+
     target_date = date or await fetch_latest_date(pool, table)
     if not target_date:
         return {"date": None, "items": []}
 
-    categories = config.categories()
-    results = []
     for cat in categories:
         cnt = await count_by_category(pool, table, cat, target_date)
         results.append({"category": cat, "count": cnt})
-    return {"date": target_date, "items": results}
+    return {"date": target_date, "items": results, "scope": "daily"}
 
 
 def init_sync_db():
