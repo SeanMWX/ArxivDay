@@ -185,7 +185,8 @@ async def init_app():
     app.router.add_get("/calendar", calendar_handler)
     app.router.add_get("/favorites", favorites_handler)
     app.router.add_get("/archive", archive_handler)
-    app.router.add_get("/storage", storage_handler)
+    app.router.add_get("/profile", storage_handler)
+    app.router.add_get("/storage", storage_handler)  # alias
     app.router.add_get("/{tail:.*}", handle_404)
 
     async def close_session(app):
