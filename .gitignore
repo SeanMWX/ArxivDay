@@ -22,6 +22,18 @@ dist/
 htmlcov/
 .coverage
 
+# Android / Gradle artifacts
+.gradle/
+**/build/
+local.properties
+*.iml
+*.apk
+*.aab
+*.ap_
+captures/
+.externalNativeBuild/
+.cxx/
+
 # Tool caches
 .pytest_cache/
 .mypy_cache/

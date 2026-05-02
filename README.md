@@ -186,6 +186,71 @@ key=<YOUR_API_KEY>                  # api的config.ini 里面的key
     arxiv/bin/python3 data_api.py
     ```
 
+### 7. Android App
+仓库的`app/`目录是 Arxiv Day 的 Android 客户端，使用 Kotlin、Jetpack Compose、Material 3、Retrofit、Room 和 DataStore 开发。它会直接调用`api/data_api.py`提供的接口，包括`/latest`、`/articles`、`/calendar`、`/categories`和`/health`。
+
+当前 Android 端支持：
+
+- 查看最新论文列表和中文摘要
+- 按 arXiv 分类过滤论文
+- 已读、未读状态管理
+- 本地收藏论文
+- 查看论文详情、打开 arXiv 原文、分享论文
+- 查看有论文数据的日历日期
+- 检查 API 服务状态
+
+构建 Android App：
+
+对于Windows：
+```
+cd app
+.\gradlew.bat :app:assembleDebug
+```
+
+对于Linux/macOS：
+```
+cd app
+./gradlew :app:assembleDebug
+```
+
+Debug APK 会生成在`app/app/build/outputs/apk/debug/`下面。这个目录属于构建产物，不需要提交到 GitHub。
+
+## Git 提交说明
+准备提交 Android App 时，应该上传源码、配置和资源文件，不应该上传本地缓存、构建产物和个人配置。
+
+需要提交的 Android 文件主要包括：
+
+- `app/settings.gradle.kts`
+- `app/build.gradle.kts`
+- `app/gradle.properties`
+- `app/gradle/libs.versions.toml`
+- `app/gradle/wrapper/gradle-wrapper.jar`
+- `app/gradle/wrapper/gradle-wrapper.properties`
+- `app/gradlew`
+- `app/gradlew.bat`
+- `app/app/build.gradle.kts`
+- `app/app/src/`
+- `app/assets/`
+- `app/.gitignore`
+
+不需要提交的文件和目录包括：
+
+- `app/.gradle/`
+- `app/build/`
+- `app/app/build/`
+- `app/.idea/`
+- `app/local.properties`
+- `*.apk`
+- `*.aab`
+- `*.iml`
+
+可以用下面的命令确认将要提交什么：
+
+```
+git status --short
+git status --short --ignored app
+```
+
 ## 注意事项
 1. 确保安装了MySQL、Python等必备软件。
 2. 确保安装了所有依赖项，使用pip install -r requirements.txt命令。

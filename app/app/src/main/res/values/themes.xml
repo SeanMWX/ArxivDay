@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Base theme required by AndroidManifest; actual theming is handled by Compose -->
+    <style name="Theme.ArxivDay" parent="android:Theme.Material.Light.NoActionBar" />
+</resources>
