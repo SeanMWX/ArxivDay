@@ -141,7 +141,64 @@ base_url=<YOUR_API_URL>             # 自己的api地址
 key=<YOUR_API_KEY>                  # api的config.ini 里面的key
 ```
 
-### 6. 运行
+server 也支持通过环境变量覆盖配置，优先级高于`server/config.ini`：
+
+- `SERVER_PORT`：server 监听端口，默认`80`
+- `API_BASE_URL`：data API 地址
+- `API_KEY`：data API 的`X-API-Key`
+
+### 5.4 使用 Docker 启动 server
+Docker 相关文件都放在`server/`目录下。Docker 模式只启动 Web server，不会启动`api/`、`arxiv_auto/`或 MySQL。因此需要先保证 data API 已经可以访问，并且`API_KEY`和`api/config.ini`里的 key 一致。
+
+第一次使用时复制环境变量模板：
+
+对于Windows PowerShell：
+```
+cd server
+Copy-Item .env.example .env
+```
+
+对于Linux/macOS：
+```
+cd server
+cp .env.example .env
+```
+
+然后编辑`.env`：
+
+```
+SERVER_HOST_PORT=8080
+API_BASE_URL=http://host.docker.internal:8000
+API_KEY=<YOUR_API_KEY>
+```
+
+如果 data API 跑在同一台机器的 Docker Desktop 外部，Windows/macOS 通常可以使用`http://host.docker.internal:8000`。Linux 环境下可以改成宿主机 IP，或者把 server 和 API 放到同一个 Docker network 后使用服务名。
+
+启动 server：
+
+```
+docker compose up -d --build
+```
+
+访问：
+
+```
+http://localhost:8080
+```
+
+查看日志：
+
+```
+docker compose logs -f server
+```
+
+停止：
+
+```
+docker compose down
+```
+
+### 6. 不使用 Docker 运行
 打开三个命令行窗口，一个运行`arxiv_auto.py`以定时从arxiv收录文章，另一个运行`server.py`提供Web界面，最后一个运行从`data_api.py`作为arxiv_auto 和 server 之间的bridge，作为API的功能
 
 - 第一个窗口运行arxiv_auto.py，每一段时间从arxiv收录：
@@ -162,14 +219,16 @@ key=<YOUR_API_KEY>                  # api的config.ini 里面的key
 
     对于Windows：
     ```
-    .\arxiv\Scripts\activate
-    .\arxiv\Scripts\python3 asyn_server.py
+    cd server
+    ..\arxiv\Scripts\activate
+    python asyn_server.py
     ```
 
     对于Linux：
     ```
-    source arxiv/bin/activate
-    arxiv/bin/python3 asyn_server.py
+    cd server
+    source ../arxiv/bin/activate
+    python asyn_server.py
     ```
 
 - 第三个窗口运行data_api.py，会给server提供api接口：

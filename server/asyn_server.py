@@ -2,11 +2,15 @@ import os
 import json
 import configparser
 from datetime import datetime
+from pathlib import Path
 
 import aiohttp
 import aiohttp_jinja2
 import jinja2
 from aiohttp import web
+
+
+BASE_DIR = Path(__file__).resolve().parent
 
 
 class CaseSensitiveConfigParser(configparser.ConfigParser):
@@ -15,24 +19,30 @@ class CaseSensitiveConfigParser(configparser.ConfigParser):
 
 
 class Config:
-    """Load server and API settings from config.ini or env."""
+    """Load server and API settings from env or config.ini."""
 
-    def __init__(self, filename: str = "config.ini"):
+    def __init__(self, filename=None):
+        self.filename = Path(filename) if filename else BASE_DIR / "config.ini"
         self.config = CaseSensitiveConfigParser()
-        self.config.read(filename)
+        self.config.read(self.filename, encoding="utf-8")
+
+    def _get(self, section: str, key: str, default: str = "") -> str:
+        if not self.config.has_section(section):
+            return default
+        return self.config[section].get(key, default)
 
     def server_port(self) -> int:
-        return int(self.config["server"].get("port", 80))
+        return int(os.getenv("SERVER_PORT") or self._get("server", "port", "80"))
 
     def api_base_url(self) -> str:
-        base = os.getenv("API_BASE_URL") or self.config["api"].get("base_url", "")
+        base = os.getenv("API_BASE_URL") or self._get("api", "base_url")
         base = base.rstrip("/")
         if not base:
             raise RuntimeError("API base_url not configured")
         return base
 
     def api_key(self) -> str:
-        key = os.getenv("API_KEY") or self.config["api"].get("key")
+        key = os.getenv("API_KEY") or self._get("api", "key")
         if not key:
             raise RuntimeError("API key not configured")
         return key
@@ -96,6 +106,10 @@ async def index(request):
 
 async def handle_404(request):
     return aiohttp_jinja2.render_template("404.html", request, {}, status=404)
+
+
+async def healthz(request):
+    return web.json_response({"status": "ok"})
 
 
 async def article_handler(request):
@@ -180,13 +194,14 @@ async def storage_handler(request):
 async def init_app():
     """Initializes and returns the web application backed by the data API."""
     app = web.Application()
-    aiohttp_jinja2.setup(app, loader=jinja2.FileSystemLoader("templates"))
-    cfg = Config("config.ini")
+    aiohttp_jinja2.setup(app, loader=jinja2.FileSystemLoader(BASE_DIR / "templates"))
+    cfg = Config()
 
     app["config"] = cfg
     app["api_base"] = cfg.api_base_url()
     app["http_session"] = aiohttp.ClientSession(headers={"X-API-Key": cfg.api_key()})
 
+    app.router.add_get("/healthz", healthz)
     app.router.add_get("/", index)
     app.router.add_get("/articles", article_handler)
     app.router.add_get("/calendar", calendar_handler)
@@ -204,6 +219,6 @@ async def init_app():
 
 
 if __name__ == "__main__":
-    port = Config("config.ini").server_port()
+    port = Config().server_port()
     app = init_app()
     web.run_app(app, port=port)

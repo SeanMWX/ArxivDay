@@ -1,0 +1,19 @@
+services:
+  server:
+    build:
+      context: .
+    image: arxivday-server:latest
+    container_name: arxivday-server
+    ports:
+      - "${SERVER_HOST_PORT:-8080}:80"
+    environment:
+      SERVER_PORT: "80"
+      API_BASE_URL: "${API_BASE_URL:?Set API_BASE_URL in .env}"
+      API_KEY: "${API_KEY:?Set API_KEY in .env}"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import os, urllib.request; urllib.request.urlopen('http://127.0.0.1:%s/healthz' % os.environ.get('SERVER_PORT', '80'), timeout=2)\""]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
