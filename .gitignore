@@ -1,10 +1,22 @@
 # Local secrets/config
 # contains DB/API keys
-config.ini  
+config.ini
 # environment variable overrides
-.env        
+.env
+.env.local
+.env.*.local
+!.env.example
 # pyenv/poetry version pin
-.python-version  
+.python-version
+
+# Docker local overrides/runtime data
+docker-compose.override.yml
+compose.override.yml
+**/docker-compose.override.yml
+**/compose.override.yml
+api/data/
+api/*.db-shm
+api/*.db-wal
 
 # Virtual environments
 .venv/

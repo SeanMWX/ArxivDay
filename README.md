@@ -138,7 +138,7 @@ port=80
 
 [api]
 base_url=<YOUR_API_URL>             # 自己的api地址
-key=<YOUR_API_KEY>                  # api的config.ini 里面的key
+key=<YOUR_API_KEY>                  # 和 api 的 API_KEY 保持一致
 ```
 
 server 也支持通过环境变量覆盖配置，优先级高于`server/config.ini`：
@@ -147,8 +147,78 @@ server 也支持通过环境变量覆盖配置，优先级高于`server/config.i
 - `API_BASE_URL`：data API 地址
 - `API_KEY`：data API 的`X-API-Key`
 
-### 5.4 使用 Docker 启动 server
-Docker 相关文件都放在`server/`目录下。Docker 模式只启动 Web server，不会启动`api/`、`arxiv_auto/`或 MySQL。因此需要先保证 data API 已经可以访问，并且`API_KEY`和`api/config.ini`里的 key 一致。
+### 5.4 使用 Docker 启动 api
+Docker 相关文件都放在`api/`目录下。Docker 模式只启动 data API，不会启动`server/`、`arxiv_auto/`或 MySQL。MySQL 默认视为已经存在的外部服务，容器只会连接它，不会创建、迁移或重置数据库。
+
+第一次使用时复制环境变量模板：
+
+对于Windows PowerShell：
+```
+cd api
+Copy-Item .env.example .env
+```
+
+对于Linux/macOS：
+```
+cd api
+cp .env.example .env
+```
+
+然后编辑`.env`，填入已有 MySQL 和 API key：
+
+```
+API_HOST_PORT=8000
+API_PORT=8000
+API_KEY=<YOUR_API_KEY>
+
+DB_HOST=<YOUR_EXISTING_MYSQL_HOST_OR_IP>
+DB_PORT=3306
+DB_USER=<YOUR_DATABASE_USER>
+DB_PASSWORD=<YOUR_DATABASE_PASSWORD>
+DB_NAME=arxiv
+
+ARXIV_TABLE=arxiv_daily
+CATEGORIES=cs.AI, cs.CR, cs.LG
+SYNC_DB_PATH=/data/sync.db
+```
+
+注意：如果 MySQL 跑在宿主机或另一台服务器上，`DB_HOST`不要写成容器里的`localhost`，而要写宿主机 IP、域名，或 Docker Desktop 可用的`host.docker.internal`。
+
+启动 api：
+
+```
+docker compose up -d --build
+```
+
+检查健康状态：
+
+对于Windows PowerShell：
+```
+$headers = @{ "X-API-Key" = "<YOUR_API_KEY>" }
+Invoke-RestMethod http://localhost:8000/health -Headers $headers
+```
+
+对于Linux/macOS：
+```
+curl -H "X-API-Key: <YOUR_API_KEY>" http://localhost:8000/health
+```
+
+查看日志：
+
+```
+docker compose logs -f api
+```
+
+停止：
+
+```
+docker compose down
+```
+
+`/sync`接口使用的`sync.db`默认保存在 Docker volume `api-sync-data`中，对应容器内路径为`/data/sync.db`，容器重建后仍会保留。
+
+### 5.5 使用 Docker 启动 server
+Docker 相关文件都放在`server/`目录下。Docker 模式只启动 Web server，不会启动`api/`、`arxiv_auto/`或 MySQL。因此需要先保证 data API 已经可以访问，并且`API_KEY`和 api 的`API_KEY`一致。
 
 第一次使用时复制环境变量模板：
 
@@ -168,11 +238,11 @@ cp .env.example .env
 
 ```
 SERVER_HOST_PORT=8080
-API_BASE_URL=http://host.docker.internal:8000
+API_BASE_URL=http://<YOUR_API_HOST_OR_DOMAIN>:8000
 API_KEY=<YOUR_API_KEY>
 ```
 
-如果 data API 跑在同一台机器的 Docker Desktop 外部，Windows/macOS 通常可以使用`http://host.docker.internal:8000`。Linux 环境下可以改成宿主机 IP，或者把 server 和 API 放到同一个 Docker network 后使用服务名。
+如果 data API 跑在另一台服务器上，`API_BASE_URL`填写那台服务器的 IP 或域名，例如`http://api.example.com:8000`。如果 data API 跑在同一台机器的 Docker Desktop 外部，Windows/macOS 通常可以使用`http://host.docker.internal:8000`。Linux 环境下可以改成宿主机 IP，或者把 server 和 API 放到同一个 Docker network 后使用服务名。
 
 启动 server：
 

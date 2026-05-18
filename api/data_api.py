@@ -24,38 +24,59 @@ class Config:
         self.config = CaseSensitiveConfigParser()
         self.config.read(filename)
 
+    def _get(self, section: str, key: str, default: Optional[str] = None) -> Optional[str]:
+        if not self.config.has_section(section):
+            return default
+        return self.config[section].get(key, default)
+
+    def _env_or_config(
+        self,
+        env_name: str,
+        section: str,
+        key: str,
+        default: Optional[str] = None,
+    ) -> Optional[str]:
+        value = os.getenv(env_name)
+        if value:
+            return value
+        return self._get(section, key, default)
+
+    def _required(self, env_name: str, section: str, key: str, label: str) -> str:
+        value = self._env_or_config(env_name, section, key)
+        if not value:
+            raise RuntimeError(
+                f"{label} not configured. Set {env_name} env or [{section}].{key} in config.ini"
+            )
+        return value
+
     def db_config(self) -> dict:
-        cfg = self.config["database"]
         return {
-            "host": os.getenv("DB_HOST", cfg.get("host")),
-            "port": int(os.getenv("DB_PORT", cfg.get("port", fallback="3306"))),
-            "user": os.getenv("DB_USER", cfg.get("user")),
-            "password": os.getenv("DB_PASSWORD", cfg.get("password")),
-            "db": os.getenv("DB_NAME", cfg.get("database")),
-            "charset": cfg.get("charset", fallback="utf8mb4"),
+            "host": self._required("DB_HOST", "database", "host", "Database host"),
+            "port": int(self._env_or_config("DB_PORT", "database", "port", "3306")),
+            "user": self._required("DB_USER", "database", "user", "Database user"),
+            "password": self._required("DB_PASSWORD", "database", "password", "Database password"),
+            "db": self._required("DB_NAME", "database", "database", "Database name"),
+            "charset": self._get("database", "charset", "utf8mb4"),
             "autocommit": True,
             "pool_recycle": 3600
         }
 
     def articles_table(self) -> str:
-        return self.config["settings"].get("arxiv_table")
+        return self._env_or_config("ARXIV_TABLE", "settings", "arxiv_table", "arxiv_daily")
 
     def categories(self):
-        raw = self.config["settings"].get("categories", "")
+        raw = self._env_or_config("CATEGORIES", "settings", "categories", "")
         return [c.strip() for c in raw.split(",") if c.strip()]
 
     def api_key(self) -> str:
-        key = os.getenv("API_KEY")
-        if not key and self.config.has_section("api"):
-            key = self.config["api"].get("key")
+        key = self._env_or_config("API_KEY", "api", "key")
         if not key:
             raise RuntimeError("API key not configured. Set API_KEY env or [api].key in config.ini")
         return key
 
     def server_port(self) -> int:
-        if self.config.has_section("server"):
-            return int(self.config["server"].get("port", 8000))
-        return int(os.getenv("PORT", 8000))
+        port = os.getenv("API_PORT") or os.getenv("PORT") or self._get("server", "port", "8000")
+        return int(port)
 
 
 async def create_pool(loop, db_config: dict):

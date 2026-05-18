@@ -1,0 +1,16 @@
+__pycache__/
+*.py[cod]
+*.pyo
+*.log
+
+.venv/
+venv/
+env/
+
+.env
+config.ini
+sync.db
+
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
