@@ -14,3 +14,5 @@ frequency_hours=2
 
 [chatgpt]
 api_key=<YOUR-OPENAI-API-KEY-HERE>
+model=gpt-5.6-luna
+reasoning_effort=none

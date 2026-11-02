@@ -1,11 +1,25 @@
 from datetime import datetime, timedelta
-from openai import OpenAI
+from openai import (
+    OpenAI,
+    AuthenticationError,
+    BadRequestError,
+    NotFoundError,
+    PermissionDeniedError,
+)
 import arxiv
 import configparser
 import mysql.connector
 from mysql.connector import Error
 import schedule
 import time
+
+DEFAULT_MODEL = "gpt-5.6-luna"
+NON_RETRYABLE_OPENAI_ERRORS = (
+    AuthenticationError,
+    BadRequestError,
+    NotFoundError,
+    PermissionDeniedError,
+)
 
 class Article:
     """
@@ -38,10 +52,13 @@ class Article:
         # 翻译标题
         while retries < max_retries:
             try:
-                self.CN_title = model.prompt('请帮我翻译这个文献标题：%s' % (self.title))
+                self.CN_title = model.prompt('请将以下文献标题翻译成中文，只返回译文，不要解释、备选译法或 Markdown 格式：%s' % (self.title))
                 if self.CN_title is None:
                     raise Exception("CN_Title 未正确翻译。")
                 break
+            except NON_RETRYABLE_OPENAI_ERRORS:
+                # 模型停用、密钥或请求配置错误，重试同一请求无法恢复。
+                raise
             except Exception as e:
                 retries += 1
                 print(f"An error occurred: {e}, Retrying... ({retries}/{max_retries})")
@@ -56,10 +73,12 @@ class Article:
 
         while retries < max_retries:
             try:
-                self.CN_summary = model.prompt('请帮我翻译这个文献摘要：%s' % (self.summary))
+                self.CN_summary = model.prompt('请将以下文献摘要翻译成中文，只返回完整译文，不要解释、总结或 Markdown 格式：%s' % (self.summary))
                 if self.CN_summary is None:
                     raise Exception("CN_summary 未正确翻译。")
                 break
+            except NON_RETRYABLE_OPENAI_ERRORS:
+                raise
             except Exception as e:
                 retries += 1
                 print(f"An error occurred: {e}, Retrying... ({retries}/{max_retries})")
@@ -77,26 +96,31 @@ class ChatGPTModel:
     封装与ChatGPT模型交互的方法，主要用于将英文标题和摘要翻译成中文。
     """
     # GPT API pricing: https://openai.com/pricing
-    def __init__(self, api_key=None, model="gpt-3.5-turbo-0125"):
-        self.client = OpenAI(api_key=api_key)
+    def __init__(self, api_key=None, model=DEFAULT_MODEL, reasoning_effort="none"):
+        # 重试由 Article 统一处理，避免与 SDK 自带重试叠加。
+        self.client = OpenAI(api_key=api_key, max_retries=0, timeout=60.0)
         self.model = model
+        self.reasoning_effort = reasoning_effort
 
-    def prompt(self, message, temperature=0.7, max_tokens=2000):
-        try:
-            chat_completion = self.client.chat.completions.create(
-                messages=[
-                    {
-                        "role": "user",
-                        "content": message,
-                    }
-                ],
-                model=self.model,
-                temperature=temperature,
-                max_tokens=max_tokens
-            )
-            return chat_completion.choices[0].message.content
-        except Exception as e:
-            print(f"An error occurred: {e}")
+    def prompt(self, message, temperature=None, max_tokens=2000):
+        request = {
+            "messages": [{"role": "user", "content": message}],
+            "model": self.model,
+            "max_completion_tokens": max_tokens,
+        }
+        if self.reasoning_effort:
+            request["reasoning_effort"] = self.reasoning_effort
+        if temperature is not None:
+            request["temperature"] = temperature
+
+        chat_completion = self.client.chat.completions.create(**request)
+        choice = chat_completion.choices[0]
+        content = choice.message.content
+        if choice.finish_reason != "stop":
+            raise ValueError(f"翻译未完整生成：{choice.finish_reason}")
+        if not content or not content.strip():
+            raise ValueError("模型返回了空翻译。")
+        return content.strip()
 
 class Config:
     """
@@ -111,6 +135,12 @@ class Config:
 
     def api_key(self):
         return self.config['chatgpt']['api_key']
+
+    def chatgpt_model(self):
+        return self.config.get('chatgpt', 'model', fallback=DEFAULT_MODEL).strip() or DEFAULT_MODEL
+
+    def reasoning_effort(self):
+        return self.config.get('chatgpt', 'reasoning_effort', fallback='none').strip() or None
     
     def fetch_frequency(self):
         return int(self.config['schedule']['frequency_hours'])
@@ -170,7 +200,12 @@ def fetch_process_insert_articles(category, table_name, max_results):
     处理文章列表：翻译和插入数据库，避免重复。集成了文章获取、翻译和插入数据库的全过程，只对数据库中不存在的新文章进行处理。
     """
     config = Config()
-    model = ChatGPTModel(api_key=config.api_key())
+    model = ChatGPTModel(
+        api_key=config.api_key(),
+        model=config.chatgpt_model(),
+        reasoning_effort=config.reasoning_effort(),
+    )
+    print(f"翻译模型：{model.model}")
     db = Database(config.db_config())
 
     print(f"（{datetime.now().date()}）：开始检索{category}文章...")

@@ -129,7 +129,13 @@ frequency_hours=2
 
 [chatgpt]
 api_key=<YOUR-OPENAI-API-KEY-HERE>  # OpenAI的密钥，可以是个人的（sk-xxxx），也可以是project的（sk-proj-xxx）
+model=gpt-5.6-luna
+reasoning_effort=none
 ```
+
+`arxiv_auto` 的配置文件位于 `arxiv_auto/config.ini`，可从同目录的 `config.ini.bak` 复制后填写。已有配置未填写 `model` 时也会默认使用 `gpt-5.6-luna`，用于低成本的标题和摘要翻译；该模型必须对你的 API 项目可用。可修改 `model` 切换模型，并按所选模型支持的值配置 `reasoning_effort`，留空则不发送此参数。
+
+旧模型 `gpt-3.5-turbo-0125` 已于 2026 年 10 月 23 日停用（[OpenAI 官方说明](https://developers.openai.com/api/docs/deprecations)）。更新代码后，先在原有 Python 环境中运行 `python -m pip install -r arxiv_auto/requirements.txt`，再进入 `arxiv_auto/` 目录重新启动 `python arxiv_auto.py`。如果配置中显式填写了旧模型，也需要修改 `model`。模型不存在、无权限或密钥错误会直接报告 API 原因并终止定时进程，需要解决配置问题后重新启动；临时错误仍最多尝试三次。
 
 #### 5.3 server
 ```
